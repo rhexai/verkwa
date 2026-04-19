@@ -1,65 +1,137 @@
+"use client";
+
+import { Show, SignInButton, SignUpButton, useUser } from "@clerk/nextjs";
 import Image from "next/image";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+
+// --- Inline SVGs for Icons ---
+const ShieldIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+);
+
+const MailIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/><rect width="20" height="16" x="2" y="4" rx="2"/></svg>
+);
+
+const LockIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+);
+
+const EyeIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+);
+
+const GoogleIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24s.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/><path fill="none" d="M0 0h48v48H0z"/></svg>
+);
+
+const GitHubIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+);
+
+const VerkwaSusuLogo = ({ className }: { className?: string }) => (
+  <div className={`flex items-center gap-2 ${className}`}>
+    <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-brand to-indigo-400 flex items-center justify-center shadow-lg shadow-brand/20">
+      <div className="w-4 h-4 rounded-sm bg-white rotate-45" />
+    </div>
+    <span className="text-2xl font-bold tracking-tight text-white drop-shadow-sm">Verkwa Susu</span>
+  </div>
+);
 
 export default function Home() {
+  const { user, isLoaded: userLoaded } = useUser();
+  const router = useRouter();
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
+    <div className="relative min-h-screen flex flex-col items-center justify-center selection:bg-brand/20 py-20 px-4 overflow-x-hidden">
+      {/* Full-Page Background Image with Gradient Overlay */}
+      <div className="fixed inset-0 z-0">
         <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
+          src="/hero.png"
+          alt="Professional smiling at camera"
+          fill
+          className="object-cover"
           priority
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+        <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/60" />
+      </div>
+
+      {/* Main Content Content - Vertically Stacked and Centered */}
+      <div className="relative z-10 w-full max-w-4xl flex flex-col items-center justify-center space-y-12 lg:space-y-20">
+        
+        {/* Brand Logo & Badge */}
+        <div className="flex flex-col items-center space-y-8 animate-in fade-in slide-in-from-top-6 duration-1000">
+          <VerkwaSusuLogo />
+          <div className="inline-flex items-center px-4 py-1.5 bg-white/10 backdrop-blur-md rounded-full border border-white/20 text-[10px] font-bold tracking-[0.2em] uppercase text-white/90">
+            Client Portal
+          </div>
+        </div>
+
+        {/* Hero Section */}
+        <div className="flex flex-col items-center text-center space-y-6 max-w-3xl px-4 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-200">
+          <h1 className="font-serif text-4xl lg:text-6xl text-white leading-[1.15] tracking-tight text-balance">
+            Manage your entire Susu Savings.
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <p className="text-lg lg:text-xl text-white/70 max-w-xl leading-relaxed text-balance">
+            Secure savings and loan management platform.
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+
+        {/* Auth State Handling */}
+        <Show when="signed-in">
+          <div className="w-full max-w-[440px] p-8 lg:p-10 bg-white/5 backdrop-blur-2xl border border-white/10 rounded-3xl shadow-2xl animate-in fade-in zoom-in-95 duration-1000 text-center space-y-8">
+            <div className="space-y-4">
+              <div className="w-20 h-20 rounded-full mx-auto overflow-hidden ring-4 ring-brand/30">
+                {user?.imageUrl && (
+                  <Image src={user.imageUrl} alt="User profile" width={80} height={80} className="object-cover" />
+                )}
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-2xl font-serif text-white">Welcome back, {user?.firstName || "Partner"}</h3>
+                <p className="text-white/50 text-sm">You are successfully authenticated.</p>
+              </div>
+            </div>
+            <Link href="/dashboard" className="group relative w-full bg-brand text-white py-4 px-6 rounded-xl font-bold flex items-center justify-center gap-2 overflow-hidden transition-all hover:bg-brand/90 hover:shadow-2xl hover:shadow-brand/40 active:scale-[0.98] shadow-lg shadow-brand/20">
+              <span>Go to Dashboard</span>
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="transition-transform group-hover:translate-x-1"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+            </Link>
+          </div>
+        </Show>
+
+        <Show when="signed-out">
+          {/* Login Card - Glassmorphism */}
+          <div className="w-full max-w-[440px] p-8 lg:p-10 bg-white/5 backdrop-blur-2xl border border-white/10 rounded-3xl shadow-2xl animate-in fade-in zoom-in-95 duration-1000 delay-400">
+            <div className="space-y-10">
+              {/* Form Header */}
+              <div className="space-y-4 text-center">
+                <h2 className="font-serif text-3xl text-white tracking-tight">Client Portal</h2>
+                <p className="text-white/50 text-base leading-relaxed">
+                  Join Verkwa Susu today to manage your savings.
+                </p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="space-y-4">
+                <SignInButton mode="modal">
+                  <button className="group relative w-full bg-brand text-white py-4 px-6 rounded-xl font-bold flex items-center justify-center gap-2 overflow-hidden transition-all hover:bg-brand/90 hover:shadow-2xl hover:shadow-brand/40 active:scale-[0.98] shadow-lg shadow-brand/20">
+                    <div className="absolute inset-0 w-full h-full bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <span>Sign In</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="transition-transform group-hover:translate-x-1"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                  </button>
+                </SignInButton>
+                
+                <SignUpButton mode="modal">
+                  <button className="group relative w-full bg-white/5 border border-white/10 text-white font-bold py-4 px-6 rounded-xl flex items-center justify-center gap-2 overflow-hidden transition-all hover:bg-white/10 active:scale-[0.98]">
+                    <span>Create an Account</span>
+                  </button>
+                </SignUpButton>
+              </div>
+            </div>
+          </div>
+        </Show>
+      </div>
     </div>
   );
 }
