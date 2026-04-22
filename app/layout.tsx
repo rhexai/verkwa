@@ -31,18 +31,6 @@ export default function RootLayout({
         className={`${plusJakartaSans.variable} ${instrumentSerif.variable} h-full antialiased`}
       >
         <body className="min-h-full flex flex-col">
-          <header className="flex justify-end items-center p-4 gap-4 h-16 w-full absolute top-0 left-0 z-50">
-            <Show when="signed-in">
-              <UserButton />
-            </Show>
-            <Show when="signed-out">
-              <SignInButton mode="modal">
-                <button className="text-sm font-bold text-white bg-fuchsia-600 hover:bg-fuchsia-700 px-4 py-2 rounded-lg transition-colors shadow-lg shadow-fuchsia-500/20">
-                  Sign In
-                </button>
-              </SignInButton>
-            </Show>
-          </header>
           {children}
         </body>
       </html>

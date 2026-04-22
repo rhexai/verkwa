@@ -5,12 +5,22 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 
+import { useSearchParams } from "next/navigation";
+import { useUser } from "@clerk/nextjs";
+import { useAuthSync } from "@/lib/hooks/useAuthSync";
+
 export default function AddCustomerPage() {
   const router = useRouter();
-  const tabs = ["IMPORTANT", "MORE", "LOCATION", "UPLOAD"];
-  const [activeTab, setActiveTab ] = useState("IMPORTANT");
+  const searchParams = useSearchParams();
+  const editId = searchParams.get("id");
+
+  const tabs = ["Important", "More", "Location", "Upload"];
+  const [activeTab, setActiveTab ] = useState("Important");
   const [branches, setBranches] = useState<any[]>([]);
+  const [employees, setEmployees] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const { resolvedRole, employeeId, isSyncing } = useAuthSync();
+  const isAdmin = ["Administrator", "admin", "superadmin"].includes(resolvedRole || "");
 
   // Form State
   const [formData, setFormData] = useState({
@@ -19,7 +29,9 @@ export default function AddCustomerPage() {
     gender: "",
     first_name: "",
     last_name: "",
-    mobile_number: ""
+    email: "",
+    mobile_number: "",
+    added_by: ""
   });
 
   useEffect(() => {
@@ -27,47 +39,110 @@ export default function AddCustomerPage() {
       const { data } = await supabase.from('branches').select('id, name');
       if (data) setBranches(data);
     }
+    async function fetchEmployees() {
+      if (isAdmin) {
+        const { data } = await supabase.from('employees').select('id, first_name, last_name').eq('status', true);
+        if (data) setEmployees(data);
+      }
+    }
     fetchBranches();
-  }, []);
+    fetchEmployees();
+
+    if (editId) {
+      async function fetchCustomer() {
+        const { data, error } = await supabase
+          .from('customers')
+          .select('*')
+          .eq('id', editId)
+          .single();
+        
+        if (data) {
+          setFormData({
+            branch_id: data.branch_id || "",
+            account_type: data.account_type || "susu account",
+            gender: data.gender || "",
+            first_name: data.first_name || "",
+            last_name: data.last_name || "",
+            email: data.email || "",
+            mobile_number: data.phone || "",
+            added_by: data.added_by || ""
+          });
+        }
+      }
+      fetchCustomer();
+    }
+  }, [editId]);
+
+  const { user, isLoaded: userLoaded } = useUser();
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!userLoaded || !user) return alert("Authentication error.");
     setLoading(true);
 
-    // Generate a simple account number (in production this would be more robust)
-    const accountNum = "ACC-" + Math.floor(100000 + Math.random() * 900000);
+    try {
+      // If not an admin, we default to the current staff member's ID
+      // If admin, we use the selected added_by from formData
+      let targetStaffId = formData.added_by;
+      
+      if (!isAdmin) {
+        const userEmail = user.primaryEmailAddress?.emailAddress;
+        const { data: staff } = await supabase
+          .from('employees')
+          .select('id')
+          .or(`clerk_id.eq.${user.id},email.eq.${userEmail}`)
+          .single();
+        targetStaffId = staff?.id || null;
+      }
 
-    const { error } = await supabase
-      .from('customers')
-      .insert([
-        {
-          first_name: formData.first_name,
-          last_name: formData.last_name,
-          account_num: accountNum,
-          phone: formData.mobile_number,
-          gender: formData.gender,
-          branch_id: formData.branch_id || null,
-          account_type: formData.account_type,
-          status: 'Active'
-        }
-      ]);
+      const customerPayload = {
+        first_name: formData.first_name,
+        last_name: formData.last_name,
+        email: formData.email,
+        phone: formData.mobile_number,
+        gender: formData.gender,
+        branch_id: formData.branch_id || null,
+        account_type: formData.account_type,
+        status: 'Active',
+        added_by: targetStaffId || null
+      };
 
-    if (error) {
-      alert("Error adding customer: " + error.message);
-    } else {
-      router.push("/dashboard/accounts");
+      let error;
+      if (editId) {
+        const { error: updateError } = await supabase
+          .from('customers')
+          .update(customerPayload)
+          .eq('id', editId);
+        error = updateError;
+      } else {
+        // Generate a new account number only for new customers
+        const accountNum = "ACC-" + Math.floor(100000 + Math.random() * 900000);
+        const { error: insertError } = await supabase
+          .from('customers')
+          .insert([{ ...customerPayload, account_num: accountNum }]);
+        error = insertError;
+      }
+
+      if (error) {
+        alert("Error saving customer: " + error.message);
+      } else {
+        router.push("/dashboard/accounts");
+      }
+    } catch (err: any) {
+      alert("An unexpected error occurred: " + err.message);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
     <div className="w-full max-w-7xl mx-auto space-y-6">
       
       {/* Breadcrumbs */}
-      <div className="flex items-center gap-2 text-[18px] font-black tracking-tight">
-        <Link href="/dashboard/accounts" className="text-fuchsia-900 hover:underline">Customers</Link>
+      <div className="flex items-center gap-2 text-[18px] font-black tracking-tight text-slate-900">
+        <Link href="/dashboard/accounts" className="hover:underline">Customers</Link>
         <span className="text-slate-400 font-medium">›</span>
-        <span className="text-slate-900">Add Customer</span>
+        <span className="text-slate-900">{editId ? "Edit Customer" : "Add Customer"}</span>
       </div>
 
       <div className="bg-white border border-[#e5e7eb] shadow-sm rounded-xl overflow-hidden pb-12">
@@ -81,11 +156,11 @@ export default function AddCustomerPage() {
               className="bg-[#32b846] hover:bg-[#2d7337] text-white px-6 py-2.5 rounded text-[13px] font-bold uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-green-900/10 transition-all active:scale-95 disabled:bg-slate-300"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-              {loading ? "..." : "SAVE"}
+              {loading ? "..." : "Save"}
             </button>
             <button className="bg-[#9333ea] hover:bg-[#7e22ce] text-white px-6 py-2.5 rounded text-[13px] font-bold uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-purple-900/10 transition-all active:scale-95">
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
-              IMPORT LIST
+              Import list
             </button>
           </div>
 
@@ -93,7 +168,7 @@ export default function AddCustomerPage() {
             <input 
               type="text" 
               placeholder="Search customer by surname ..." 
-              className="w-80 px-5 py-2.5 bg-white border border-slate-200 rounded-full text-sm font-medium focus:outline-none focus:border-fuchsia-300 transition-colors shadow-[inset_0_2px_4px_rgba(0,0,0,0.01)]"
+              className="w-80 px-5 py-2.5 bg-white border border-slate-200 rounded-full text-sm font-medium focus:outline-none focus:border-slate-300 transition-colors shadow-[inset_0_2px_4px_rgba(0,0,0,0.01)]"
             />
             <div className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center text-slate-400">
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
@@ -109,7 +184,7 @@ export default function AddCustomerPage() {
               onClick={() => setActiveTab(tab)}
               className={`pb-3 text-[14px] font-bold uppercase tracking-wider border-b-2 transition-all ${
                 activeTab === tab 
-                ? "border-[#c14a42] text-[#c14a42]" 
+                ? "border-slate-600 text-slate-800" 
                 : "border-transparent text-slate-400 hover:text-slate-600"
               }`}
             >
@@ -127,23 +202,23 @@ export default function AddCustomerPage() {
         <div className="p-8 max-w-4xl space-y-8 mt-4 font-plus-jakarta-sans">
           
           <div className="relative group">
-            <label className="absolute -top-2.5 left-3 bg-white px-1 text-[13px] text-slate-500 font-bold group-focus-within:text-fuchsia-600">Branch</label>
+            <label className="absolute -top-2.5 left-3 bg-white px-1 text-[13px] text-slate-500 font-bold group-focus-within:text-slate-500">Branch</label>
             <select 
               value={formData.branch_id}
               onChange={(e) => setFormData({...formData, branch_id: e.target.value})}
-              className="w-full px-4 py-3.5 bg-white border border-slate-300 rounded-xl text-[15px] text-slate-800 font-medium focus:outline-none focus:border-fuchsia-400 transition-colors appearance-none"
+              className="w-full px-4 py-3.5 bg-white border border-slate-300 rounded-xl text-[15px] text-slate-800 font-medium focus:outline-none focus:border-slate-300 transition-colors appearance-none"
             >
-              <option value="">Select Branch</option>
+              <option value="">Select branch</option>
               {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
             </select>
           </div>
 
           <div className="relative group">
-            <label className="absolute -top-2.5 left-3 bg-white px-1 text-[13px] text-slate-500 font-bold group-focus-within:text-fuchsia-600">Select account type</label>
+            <label className="absolute -top-2.5 left-3 bg-white px-1 text-[13px] text-slate-500 font-bold group-focus-within:text-slate-500">Select account type</label>
             <select 
               value={formData.account_type}
               onChange={(e) => setFormData({...formData, account_type: e.target.value})}
-              className="w-full px-4 py-3.5 bg-white border border-slate-300 rounded-xl text-[15px] text-slate-800 font-medium focus:outline-none focus:border-fuchsia-400 transition-colors appearance-none"
+              className="w-full px-4 py-3.5 bg-white border border-slate-300 rounded-xl text-[15px] text-slate-800 font-medium focus:outline-none focus:border-slate-300 transition-colors appearance-none"
             >
               <option value="susu account">susu account</option>
               <option value="savings">savings</option>
@@ -152,11 +227,11 @@ export default function AddCustomerPage() {
           </div>
 
           <div className="relative group">
-            <label className="absolute -top-2.5 left-3 bg-white px-1 text-[13px] text-slate-500 font-bold group-focus-within:text-fuchsia-600">gender</label>
+            <label className="absolute -top-2.5 left-3 bg-white px-1 text-[13px] text-slate-500 font-bold group-focus-within:text-slate-500">Gender</label>
             <select 
               value={formData.gender}
               onChange={(e) => setFormData({...formData, gender: e.target.value})}
-              className="w-full px-4 py-3.5 bg-white border border-slate-300 rounded-xl text-[15px] text-slate-800 font-medium focus:outline-none focus:border-fuchsia-400 transition-colors appearance-none"
+              className="w-full px-4 py-3.5 bg-white border border-slate-300 rounded-xl text-[15px] text-slate-800 font-medium focus:outline-none focus:border-slate-300 transition-colors appearance-none"
             >
               <option value="">Select Gender</option>
               <option value="Male">Male</option>
@@ -166,37 +241,62 @@ export default function AddCustomerPage() {
           </div>
 
           <div className="relative group">
-            <label className="absolute -top-2.5 left-3 bg-white px-1 text-[13px] text-slate-500 font-bold group-focus-within:text-fuchsia-600">first name</label>
+            <label className="absolute -top-2.5 left-3 bg-white px-1 text-[13px] text-slate-500 font-bold group-focus-within:text-slate-500">First name</label>
             <input 
               type="text" 
               value={formData.first_name}
               onChange={(e) => setFormData({...formData, first_name: e.target.value})}
-              className="w-full px-4 py-3.5 bg-white border border-slate-300 rounded-xl text-[15px] text-slate-800 font-medium focus:outline-none focus:border-fuchsia-400 transition-colors"
+              className="w-full px-4 py-3.5 bg-white border border-slate-300 rounded-xl text-[15px] text-slate-800 font-medium focus:outline-none focus:border-slate-300 transition-colors"
               required
             />
           </div>
 
           <div className="relative group">
-            <label className="absolute -top-2.5 left-3 bg-white px-1 text-[13px] text-slate-500 font-bold group-focus-within:text-fuchsia-600">last name</label>
+            <label className="absolute -top-2.5 left-3 bg-white px-1 text-[13px] text-slate-500 font-bold group-focus-within:text-slate-500">Last name</label>
             <input 
               type="text" 
               value={formData.last_name}
               onChange={(e) => setFormData({...formData, last_name: e.target.value})}
-              className="w-full px-4 py-3.5 bg-white border border-slate-300 rounded-xl text-[15px] text-slate-800 font-medium focus:outline-none focus:border-fuchsia-400 transition-colors"
+              className="w-full px-4 py-3.5 bg-white border border-slate-300 rounded-xl text-[15px] text-slate-800 font-medium focus:outline-none focus:border-slate-300 transition-colors"
               required
             />
           </div>
 
           <div className="relative group">
-            <label className="absolute -top-2.5 left-3 bg-white px-1 text-[13px] text-slate-500 font-bold group-focus-within:text-fuchsia-600">Mobile number</label>
+            <label className="absolute -top-2.5 left-3 bg-white px-1 text-[13px] text-slate-500 font-bold group-focus-within:text-slate-500">Email address (for portal access)</label>
+            <input 
+              type="email" 
+              value={formData.email}
+              onChange={(e) => setFormData({...formData, email: e.target.value})}
+              className="w-full px-4 py-3.5 bg-white border border-slate-300 rounded-xl text-[15px] text-slate-800 font-medium focus:outline-none focus:border-slate-300 transition-colors"
+              placeholder="client@example.com"
+            />
+          </div>
+
+          <div className="relative group">
+            <label className="absolute -top-2.5 left-3 bg-white px-1 text-[13px] text-slate-500 font-bold group-focus-within:text-slate-500">Mobile number</label>
             <input 
               type="text" 
               value={formData.mobile_number}
               onChange={(e) => setFormData({...formData, mobile_number: e.target.value})}
-              className="w-full px-4 py-3.5 bg-white border border-slate-200 rounded-xl text-[15px] text-slate-800 font-medium focus:outline-none focus:border-fuchsia-400 transition-colors"
+              className="w-full px-4 py-3.5 bg-white border border-slate-200 rounded-xl text-[15px] text-slate-800 font-medium focus:outline-none focus:border-slate-300 transition-colors"
               placeholder="+233"
             />
           </div>
+
+          {isAdmin && (
+            <div className="relative group">
+              <label className="absolute -top-2.5 left-3 bg-white px-1 text-[13px] text-slate-500 font-bold group-focus-within:text-slate-500">Staff member</label>
+              <select 
+                value={formData.added_by}
+                onChange={(e) => setFormData({...formData, added_by: e.target.value})}
+                className="w-full px-4 py-3.5 bg-white border border-slate-300 rounded-xl text-[15px] text-slate-800 font-medium focus:outline-none focus:border-slate-300 transition-colors appearance-none"
+              >
+                <option value="">Select staff (Kenneth, etc.)</option>
+                {employees.map(e => <option key={e.id} value={e.id}>{e.first_name} {e.last_name}</option>)}
+              </select>
+            </div>
+          )}
 
         </div>
       </div>

@@ -2,219 +2,421 @@
 
 import { useEffect, useState } from "react";
 import { useUser } from "@clerk/nextjs";
+import Link from "next/link";
+import { useAuthSync } from "@/lib/hooks/useAuthSync";
 import { supabase } from "@/lib/supabase";
+import { startOfMonth } from "date-fns";
 
 export default function DashboardPage() {
-  const { isLoaded } = useUser();
+  const { user, isLoaded } = useUser();
+  const { resolvedRole, isSyncing, employeeId } = useAuthSync();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
-    customers: 0,
-    employees: 0,
-    branches: 0,
-    transactions: 0,
-    financials: {
-      revenue: { today: 0, month: 0, total: 0 },
-      deposits: { today: 0, month: 0, total: 0 },
-      withdrawals: { today: 0, month: 0, total: 0 },
-      loans: { today: 0, month: 0, total: 0 },
-    },
-    staffPerformance: [] as any[]
+    staffPerformance: [] as any[],
+    pendingRequests: [] as any[]
   });
+  const [clearedIds, setClearedIds] = useState<Set<string>>(new Set());
+
+  // Initialize blacklist from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('verkwa_cleared_queue');
+    if (saved) {
+      try {
+        const ids = JSON.parse(saved);
+        if (Array.isArray(ids)) setClearedIds(new Set(ids));
+      } catch (e) {
+        console.error("Local blacklist corrupted");
+      }
+    }
+  }, []);
+
+  // Use resolvedRole from Supabase fallback if available, otherwise Clerk metadata
+  const roleRaw = resolvedRole || (user?.publicMetadata?.role as string) || "client";
+  const role = roleRaw.toLowerCase();
+  const isAdmin = ["administrator", "admin", "superadmin"].includes(role);
+  const isRestricted = !isAdmin && role !== "client" && role !== "";
+  const isStaff = ["administrator", "manager", "operator", "mobilizer", "admin", "superadmin", "employee"].includes(role);
+  const canViewFinancials = ["administrator", "manager", "admin", "superadmin"].includes(role);
 
   useEffect(() => {
     async function fetchDashboardStats() {
-      // 1. Fetch Counts
-      const [custCount, empCount, branchCount, txCount] = await Promise.all([
-        supabase.from('customers').select('*', { count: 'exact', head: true }),
-        supabase.from('employees').select('*', { count: 'exact', head: true }),
-        supabase.from('branches').select('*', { count: 'exact', head: true }),
-        supabase.from('transactions').select('*', { count: 'exact', head: true }),
-      ]);
+      if (!isStaff) {
+        setLoading(false);
+        return;
+      }
 
-      // 2. Fetch All Transactions for calculation
-      const { data: txs } = await supabase.from('transactions').select('*');
-      
-      const now = new Date();
-      const todayStr = now.toISOString().split('T')[0];
-      const monthStr = now.toISOString().slice(0, 7);
+      try {
+        // 1. Fetch Counts (Lightweight head-only queries)
+        let custCountQuery = supabase.from('customers').select('*', { count: 'exact', head: true });
+        let txCountQuery = supabase.from('transactions').select('*', { count: 'exact', head: true });
 
-      const financials = {
-        revenue: { today: 0, month: 0, total: 0 },
-        deposits: { today: 0, month: 0, total: 0 },
-        withdrawals: { today: 0, month: 0, total: 0 },
-        loans: { today: 0, month: 0, total: 0 },
-      };
+        if (isRestricted && employeeId) {
+          custCountQuery = custCountQuery.eq('added_by', employeeId);
+          txCountQuery = txCountQuery.eq('staff_id', employeeId);
+        }
 
-      if (txs) {
-        txs.forEach(tx => {
-          const txDate = tx.created_at.split('T')[0];
-          const txMonth = tx.created_at.slice(0, 7);
-          const amount = Number(tx.amount);
+        const [custCount, empCount, branchCount, txCount, pendingReqs] = await Promise.all([
+          custCountQuery,
+          supabase.from('employees').select('*', { count: 'exact', head: true }),
+          supabase.from('branches').select('*', { count: 'exact', head: true }),
+          txCountQuery,
+          isAdmin ? supabase.from('client_requests').select('*, customers(first_name, last_name, account_num)').eq('status', 'Pending').order('created_at', { ascending: false }).limit(5) : Promise.resolve({ data: [] })
+        ]);
+
+        const now = new Date();
+        const monthStart = startOfMonth(now).toISOString();
+        const todayStr = now.toISOString().split('T')[0];
+        const monthStr = now.toISOString().slice(0, 7);
+
+        // 2. Optimized Fetching Strategy
+        // A. Current Month & Today data (Heavy - includes joins for performance stats)
+        let monthlyTxsQuery = supabase
+          .from('transactions')
+          .select('amount, type, created_at, staff_id, employees(first_name, last_name)')
+          .gte('created_at', monthStart);
+
+        if (isRestricted && employeeId) {
+          monthlyTxsQuery = monthlyTxsQuery.eq('staff_id', employeeId);
+        }
+
+        // B. Lifetime Aggregates (Lightweight - primitive columns only)
+        let lifetimeTxsQuery = supabase
+          .from('transactions')
+          .select('amount, type');
+
+        if (isRestricted && employeeId) {
+          lifetimeTxsQuery = lifetimeTxsQuery.eq('staff_id', employeeId);
+        }
+
+        const [monthlyRes, lifetimeRes] = await Promise.all([
+          monthlyTxsQuery,
+          lifetimeTxsQuery
+        ]);
+
+        if (monthlyRes.error) throw monthlyRes.error;
+        if (lifetimeRes.error) throw lifetimeRes.error;
+
+        const monthlyTxs = monthlyRes.data || [];
+        const lifetimeTxs = lifetimeRes.data || [];
+
+        const financials = {
+          revenue: { today: 0, month: 0, total: 0 },
+          deposits: { today: 0, month: 0, total: 0 },
+          withdrawals: { today: 0, month: 0, total: 0 },
+          loans: { today: 0, month: 0, total: 0 },
+        };
+
+        const performanceMap: Record<string, any> = {};
+
+        // Process Lifetime Totals first
+        lifetimeTxs.forEach(tx => {
+          if (tx.status === 'rejected' || tx.status === 'denied') return; // Skip rejected/denied transactions
+          const amount = Number(tx.amount || 0);
+          if (tx.type === 'Deposit') financials.deposits.total += amount;
+          else if (tx.type === 'Withdrawal') financials.withdrawals.total += amount;
+          else if (tx.type === 'Loan') financials.loans.total += amount;
+          else if (tx.type === 'Commission') financials.revenue.total += amount;
+        });
+
+        // Process Monthly/Today/Performance data
+        monthlyTxs.forEach(tx => {
+          if (tx.status === 'rejected' || tx.status === 'denied') return; // Skip rejected/denied transactions
+          const amount = Number(tx.amount || 0);
+          const txDate = tx.created_at?.split('T')[0];
+          const txMonth = tx.created_at?.slice(0, 7);
 
           if (tx.type === 'Deposit') {
-            financials.deposits.total += amount;
             if (txDate === todayStr) financials.deposits.today += amount;
             if (txMonth === monthStr) financials.deposits.month += amount;
           } else if (tx.type === 'Withdrawal') {
-            financials.withdrawals.total += amount;
             if (txDate === todayStr) financials.withdrawals.today += amount;
             if (txMonth === monthStr) financials.withdrawals.month += amount;
+          } else if (tx.type === 'Loan') {
+            if (txDate === todayStr) financials.loans.today += amount;
+            if (txMonth === monthStr) financials.loans.month += amount;
+          } else if (tx.type === 'Commission') {
+            if (txDate === todayStr) financials.revenue.today += amount;
+            if (txMonth === monthStr) financials.revenue.month += amount;
           }
+
+          const staffName = tx.employees 
+            ? `${tx.employees.first_name} ${tx.employees.last_name}` 
+            : "System / Admin";
+            
+          if (!performanceMap[staffName]) {
+            performanceMap[staffName] = { name: staffName, today: 0, week: 0, month: 0 };
+          }
+          
+          if (txDate === todayStr) performanceMap[staffName].today += amount;
+          if (txMonth === monthStr) performanceMap[staffName].month += amount;
+          performanceMap[staffName].week += amount;
         });
+
+        setStats({
+          customers: custCount.count || 0,
+          employees: empCount.count || 0,
+          branches: branchCount.count || 0,
+          transactions: txCount.count || 0,
+          financials,
+          staffPerformance: Object.values(performanceMap),
+          pendingRequests: (isAdmin ? (pendingReqs as any).data : [] || []).filter((r: any) => !clearedIds.has(r.id))
+        });
+      } catch (err) {
+        console.error("Dashboard Stats Fetch Error:", err);
+      } finally {
+        setLoading(false);
       }
-
-      // 3. Fetch Staff Performance
-      const { data: staffTxs } = await supabase
-        .from('transactions')
-        .select('amount, staff_id, created_at, employees(first_name, last_name)');
-      
-      const performanceMap: Record<string, any> = {};
-      staffTxs?.forEach(tx => {
-        const staffName = `${tx.employees.first_name} ${tx.employees.last_name}`;
-        if (!performanceMap[staffName]) {
-          performanceMap[staffName] = { name: staffName, today: 0, week: 0, month: 0 };
-        }
-        const amount = Number(tx.amount);
-        const txDate = tx.created_at.split('T')[0];
-        const txMonth = tx.created_at.slice(0, 7);
-        
-        if (txDate === todayStr) performanceMap[staffName].today += amount;
-        if (txMonth === monthStr) performanceMap[staffName].month += amount;
-        performanceMap[staffName].week += amount; // Simplified for now
-      });
-
-      setStats({
-        customers: custCount.count || 0,
-        employees: empCount.count || 0,
-        branches: branchCount.count || 0,
-        transactions: txCount.count || 0,
-        financials,
-        staffPerformance: Object.values(performanceMap)
-      });
-      setLoading(false);
     }
 
     if (isLoaded) fetchDashboardStats();
-  }, [isLoaded]);
+  }, [isLoaded, isStaff, role, employeeId, clearedIds]);
 
-  if (!isLoaded || loading) {
+  if (!isLoaded || loading || isSyncing) {
     return (
       <div className="h-full flex items-center justify-center">
-        <div className="w-10 h-10 border-4 border-fuchsia-600 border-t-transparent rounded-full animate-spin"></div>
+        <div className="w-10 h-10 border-4 border-accent border-t-transparent rounded-full animate-spin"></div>
       </div>
     );
   }
 
+  if (role === 'client') {
+    return <ClientDashboardView user={user} />;
+  }
+
+
+
+
+
+  const tabs = ["Overview", "Deposits", "Withdrawals", "Loans", "Reports"];
+  
   const heroStats = [
-    { title: "Revenue", today: stats.financials.revenue.today.toFixed(2), month: stats.financials.revenue.month.toFixed(2), lifetime: stats.financials.revenue.total.toFixed(2), icon: "banknote" },
-    { title: "Deposits", today: stats.financials.deposits.today.toFixed(2), month: stats.financials.deposits.month.toFixed(2), lifetime: stats.financials.deposits.total.toFixed(2), icon: "wallet" },
-    { title: "Withdrawals", today: stats.financials.withdrawals.today.toFixed(2), month: stats.financials.withdrawals.month.toFixed(2), lifetime: stats.financials.withdrawals.total.toFixed(2), icon: "arrow-down" },
-    { title: "Loans", today: stats.financials.loans.today.toFixed(2), month: stats.financials.loans.month.toFixed(2), lifetime: stats.financials.loans.total.toFixed(2), icon: "coins" },
-  ];
+    { 
+      title: "Revenue", 
+      today: stats.financials.revenue.today.toFixed(2), 
+      month: stats.financials.revenue.month.toFixed(2), 
+      lifetime: stats.financials.revenue.total.toFixed(2), 
+      icon: "banknote", 
+      visible: canViewFinancials,
+      link: "/dashboard/reports",
+      actionLabel: "View Reports"
+    },
+    { 
+      title: "Deposits", 
+      today: stats.financials.deposits.today.toFixed(2), 
+      month: stats.financials.deposits.month.toFixed(2), 
+      lifetime: stats.financials.deposits.total.toFixed(2), 
+      icon: "wallet", 
+      visible: true,
+      link: "/dashboard/transactions/deposit",
+      actionLabel: "Add Deposit"
+    },
+    { 
+      title: "Withdrawals", 
+      today: stats.financials.withdrawals.today.toFixed(2), 
+      month: stats.financials.withdrawals.month.toFixed(2), 
+      lifetime: stats.financials.withdrawals.total.toFixed(2), 
+      icon: "arrow-down", 
+      visible: true,
+      link: "/dashboard/transactions/withdrawal",
+      actionLabel: "Initialize Debit"
+    },
+    { 
+      title: "Loans", 
+      today: stats.financials.loans.today.toFixed(2), 
+      month: stats.financials.loans.month.toFixed(2), 
+      lifetime: stats.financials.loans.total.toFixed(2), 
+      icon: "coins", 
+      visible: canViewFinancials,
+      link: "/dashboard/transactions?tab=LOANS",
+      actionLabel: "Manage Loans"
+    },
+  ].filter(s => s.visible);
 
   const generalStats = [
-    { value: stats.customers.toString(), label: "CUSTOMERS" },
-    { value: stats.customers.toString(), label: "ACCOUNTS" },
-    { value: stats.employees.toString(), label: "EMPLOYEES" },
-    { value: stats.branches.toString(), label: "BRANCHES" },
-    { value: stats.transactions.toString(), label: "SMS" },
-    { value: "0", label: "COMPLAINTS" },
-  ];
+    { value: stats.customers.toString(), label: "Customers", visible: !isRestricted },
+    { value: stats.customers.toString(), label: "Accounts", visible: !isRestricted },
+    { value: stats.employees.toString(), label: "Employees", visible: isAdmin },
+    { value: stats.branches.toString(), label: "Branches", visible: isAdmin },
+    { value: stats.transactions.toString(), label: "Sms", visible: canViewFinancials },
+    { value: "0", label: "Complaints", visible: true },
+  ].filter(s => s.visible);
 
   const chartsData = [
-    { title: "Commission by Branch" },
-    { title: "Deposits by Branch", hasData: true },
-    { title: "Withdrawals by Branch" },
-    { title: "Loans by Branch" },
-  ];
+    { title: "Commission by Branch", visible: canViewFinancials },
+    { title: "Deposits by Branch", hasData: true, visible: true },
+    { title: "Withdrawals by Branch", visible: true },
+    { title: "Loans by Branch", visible: canViewFinancials },
+  ].filter(c => c.visible);
 
   return (
-    <div className="w-full max-w-7xl mx-auto space-y-8 pb-20">
+    <div className="w-full max-w-7xl mx-auto space-y-10 pb-20 font-sans">
       
-      {/* 4 Hero Cards */}
+      {/* Navigation Tabs */}
+      <div className="flex items-center gap-8 border-b border-slate-100 pb-1">
+        {tabs.map((tab) => (
+          <Link
+            key={tab}
+            href={
+              tab === "Overview" ? "/dashboard" :
+              tab === "Deposits" ? "/dashboard/transactions?tab=DEPOSITS" :
+              tab === "Withdrawals" ? "/dashboard/transactions?tab=WITHDRAWALS" :
+              tab === "Loans" ? "/dashboard/transactions?tab=LOANS" :
+              "/dashboard/reports"
+            }
+            className={`pb-4 text-[13px] font-bold border-b-2 transition-all ${
+              tab === "Overview" 
+                ? "border-accent text-slate-900" 
+                : "border-transparent text-slate-400 hover:text-slate-600 hover:border-slate-200"
+            }`}
+          >
+            {tab}
+          </Link>
+        ))}
+      </div>
+
+      {/* Hero Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {heroStats.map((stat, i) => (
-          <div key={i} style={{ backgroundColor: '#2ccbba' }} className="rounded-xl text-white overflow-hidden shadow-md flex flex-col">
-            <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-white/20">
-              <div className="flex items-center gap-2 font-bold text-[15px]">
-                <div className="w-6 h-6 border-2 border-white rounded-full flex items-center justify-center">
-                  {i === 0 && <span className="text-[12px]">$</span>}
-                  {i === 1 && <div className="w-3 h-2 border-2 border-white rounded-sm" />}
-                  {i === 2 && <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>}
-                  {i === 3 && <span className="text-[10px]">L</span>}
-                </div>
-                {stat.title}
+          <div key={i} className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between min-h-[160px]">
+            <div className="flex items-center justify-between mb-4">
+              <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-600">
+                {stat.title === "Revenue" && <span className="text-sm font-bold text-slate-900 leading-none">₵</span>}
+                {stat.title === "Deposits" && <div className="w-2.5 h-2.5 bg-slate-400 rounded-full" />}
+                {stat.title === "Withdrawals" && <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>}
+                {stat.title === "Loans" && <span className="text-sm font-bold">L</span>}
               </div>
-              <button className="text-white hover:text-slate-100 transition-colors">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" x2="21" y1="14" y2="3"/></svg>
-              </button>
             </div>
 
-            <div className="p-5 flex flex-col justify-end min-h-[140px] space-y-3">
+            <div className="space-y-1">
+              <p className="text-[11px] font-bold text-slate-400 tracking-widest uppercase">{stat.title}</p>
               <div className="flex items-baseline gap-2">
-                <span className="text-[40px] font-bold leading-none tracking-tight">{stat.today}</span>
-                <span className="text-[11px] font-bold uppercase tracking-widest text-white/90">TODAY</span>
+                <span className="text-[32px] font-bold text-slate-900 tracking-tight">{stat.lifetime}</span>
+                <span className="text-[10px] font-semibold text-accent bg-slate-50 px-2 py-0.5 rounded-full">Lifetime</span>
               </div>
-              <div className="flex flex-col gap-1.5 opacity-90">
-                <div className="flex items-baseline gap-2">
-                  <span className="text-[22px] font-bold leading-none">{stat.month}</span>
-                  <span className="text-[10px] font-bold uppercase tracking-widest">MONTH</span>
+            </div>
+
+            <div className="mt-4 pt-4 border-t border-slate-50 flex items-center justify-between">
+              <div className="flex gap-4">
+                <div className="space-y-0.5">
+                  <p className="text-[9px] font-bold text-slate-300 tracking-widest leading-none">Today</p>
+                  <p className="text-[13px] font-bold text-slate-600 tracking-tight">{stat.today}</p>
                 </div>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-[22px] font-bold leading-none">{stat.lifetime}</span>
-                  <span className="text-[10px] font-bold uppercase tracking-widest">LIFE TIME</span>
+                <div className="space-y-0.5">
+                  <p className="text-[9px] font-bold text-slate-300 tracking-widest leading-none">Monthly</p>
+                  <p className="text-[13px] font-bold text-slate-600 tracking-tight">{stat.month}</p>
                 </div>
               </div>
+              <Link 
+                href={stat.link}
+                className="text-[10px] font-black text-accent uppercase tracking-tighter hover:underline flex items-center gap-1"
+              >
+                {stat.actionLabel}
+                <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+              </Link>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Mobilizers Collection Summary Table */}
-      <div className="bg-white border text-left border-slate-200 rounded-xl overflow-hidden shadow-sm">
-        <div className="bg-fuchsia-50/30 border-b border-slate-200 p-5">
-          <h2 className="text-[16px] font-bold text-slate-800">Mobilizers Collection Summary</h2>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead>
-              <tr className="border-b border-slate-200 bg-slate-50">
-                <th className="px-6 py-4 text-xs font-bold text-[#68adbb] uppercase tracking-widest w-1/4">STAFF</th>
-                <th className="px-6 py-4 text-xs font-bold text-[#68adbb] uppercase tracking-widest w-1/4">TODAY</th>
-                <th className="px-6 py-4 text-xs font-bold text-[#68adbb] uppercase tracking-widest w-1/4">WEEK</th>
-                <th className="px-6 py-4 text-xs font-bold text-[#68adbb] uppercase tracking-widest w-1/4">MONTH</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 font-plus-jakarta-sans text-sm font-medium">
-              {stats.staffPerformance.length === 0 ? (
-                <tr>
-                  <td colSpan={4} className="px-6 py-12 text-center text-slate-400 font-medium italic">
-                    No staff collections recorded for this period.
-                  </td>
+      {/* Admin Pending Requests Queue */}
+      {isAdmin && stats.pendingRequests.length > 0 && (
+        <div className="bg-white border-2 border-accent/20 rounded-2xl shadow-xl shadow-accent/5 overflow-hidden animate-in slide-in-from-top duration-500">
+          <div className="p-6 bg-accent/5 border-b border-accent/10 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+               <div className="w-8 h-8 rounded-lg bg-accent text-white flex items-center justify-center font-bold animate-pulse">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m12 14 4-4-4-4"/><path d="M3 10h13a5 5 0 0 1 5 5v2"/></svg>
+               </div>
+               <h2 className="text-[15px] font-black text-slate-800 uppercase tracking-tight">Requests Awaiting Approval</h2>
+            </div>
+            <Link href="/dashboard/authorizations" className="text-[11px] font-black text-accent uppercase tracking-widest hover:underline">Clearance Terminal</Link>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="bg-slate-50/50">
+                  <th className="px-8 py-4 text-[11px] font-bold text-slate-400 tracking-widest uppercase">Client</th>
+                  <th className="px-8 py-4 text-[11px] font-bold text-slate-400 tracking-widest uppercase">Type</th>
+                  <th className="px-8 py-4 text-[11px] font-bold text-slate-400 tracking-widest uppercase text-right">Amount</th>
+                  <th className="px-8 py-4 text-[11px] font-bold text-slate-400 tracking-widest uppercase text-right">Actions</th>
                 </tr>
-              ) : (
-                stats.staffPerformance.map((staff, i) => (
-                  <tr key={i} className="hover:bg-slate-50 transition-colors bg-white">
-                    <td className="px-6 py-5 font-black text-slate-900">{staff.name}</td>
-                    <td className="px-6 py-5 text-slate-600 font-bold">{staff.today.toFixed(2)}</td>
-                    <td className="px-6 py-5 text-slate-600 font-bold">{staff.week.toFixed(2)}</td>
-                    <td className="px-6 py-5 text-slate-600 font-bold">{staff.month.toFixed(2)}</td>
+              </thead>
+              <tbody className="divide-y divide-slate-50 text-sm font-medium">
+                {stats.pendingRequests.map((req, i) => (
+                  <tr key={i} className="hover:bg-slate-50/80 transition-colors group">
+                    <td className="px-8 py-5">
+                       <p className="font-bold text-slate-900 leading-none">{req.customers?.first_name} {req.customers?.last_name}</p>
+                       <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-tighter">{req.customers?.account_num}</p>
+                    </td>
+                    <td className="px-8 py-5">
+                       <span className={`px-2 py-0.5 rounded-full text-[10px] font-black tracking-widest uppercase ${
+                          req.type === 'Withdrawal' ? 'bg-red-50 text-red-500' : 'bg-green-50 text-green-500'
+                       }`}>
+                          {req.type}
+                       </span>
+                    </td>
+                    <td className="px-8 py-5 text-right font-black text-slate-900">₵ {Number(req.amount).toLocaleString()}</td>
+                    <td className="px-8 py-5 text-right">
+                       <Link href="/dashboard/authorizations" className="px-4 py-1.5 bg-white border border-slate-200 rounded-full text-[11px] font-black text-slate-600 hover:bg-slate-900 hover:text-white transition-all shadow-sm">Review</Link>
+                    </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Collection Summary Table */}
+      {!isRestricted && (
+        <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
+          <div className="p-6 border-b border-slate-50 flex items-center justify-between">
+            <h2 className="text-[15px] font-bold text-slate-800">Collection Summary</h2>
+            <div className="flex gap-1.5">
+               <div className="w-1.5 h-1.5 bg-accent rounded-full" />
+               <div className="w-1.5 h-1.5 bg-slate-100 rounded-full" />
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="bg-slate-50/50">
+                  <th className="px-8 py-4 text-[11px] font-bold text-slate-400 tracking-widest uppercase">STAFF</th>
+                  <th className="px-8 py-4 text-[11px] font-bold text-slate-400 tracking-widest uppercase">TODAY</th>
+                  <th className="px-8 py-4 text-[11px] font-bold text-slate-400 tracking-widest uppercase">WEEK</th>
+                  <th className="px-8 py-4 text-[11px] font-bold text-slate-400 tracking-widest uppercase">MONTH</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50 text-sm font-medium">
+                {stats.staffPerformance.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-8 py-16 text-center text-slate-300 font-semibold tracking-widest text-[11px]">
+                      No operative data logged in current session
+                    </td>
+                  </tr>
+                ) : (
+                  stats.staffPerformance.map((staff, i) => (
+                    <tr key={i} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="px-8 py-5 font-bold text-slate-900">{staff.name}</td>
+                      <td className="px-8 py-5 text-slate-600">{staff.today.toFixed(2)}</td>
+                      <td className="px-8 py-5 text-slate-600">{staff.week.toFixed(2)}</td>
+                      <td className="px-8 py-5 text-slate-900 font-bold">{staff.month.toFixed(2)}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* General Summaries Grid */}
-      <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
-        <h2 className="text-[16px] font-bold text-slate-800 mb-5">General Summaries</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="bg-white border border-slate-200 p-8 rounded-2xl shadow-sm space-y-6">
+        <h2 className="text-[13px] font-bold text-slate-400 tracking-widest">Global parameters</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-6">
           {generalStats.map((stat, i) => (
-            <div key={i} className="flex flex-col items-start p-4 rounded-lg bg-white border border-slate-300 shadow-sm">
-              <span className="text-[28px] font-black text-slate-800 leading-none mb-1">{stat.value}</span>
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{stat.label}</span>
+            <div key={i} className="flex flex-col items-start p-4 rounded-xl hover:bg-slate-50 transition-colors group">
+              <span className="text-[28px] font-bold text-slate-900 tracking-tight mb-1">{stat.value}</span>
+              <span className="text-[9px] font-bold text-slate-400 tracking-[0.2em]">{stat.label}</span>
             </div>
           ))}
         </div>
@@ -223,65 +425,392 @@ export default function DashboardPage() {
       {/* Charts Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {chartsData.map((chart, i) => (
-          <div key={i} className="bg-white border border-slate-200 rounded-xl p-8 shadow-sm space-y-6 flex flex-col min-h-[380px]">
+          <div key={i} className="bg-white border border-slate-100 p-8 rounded-2xl shadow-sm space-y-8 flex flex-col min-h-[420px]">
             <div className="flex items-start justify-between">
-              <div>
-                <h2 className="text-[18px] font-bold text-slate-800">{chart.title}</h2>
-                <p className="text-[13px] font-medium text-slate-500 mt-1">Tap or click on a bar for actual figures.</p>
+              <div className="space-y-1">
+                <h2 className="text-[15px] font-bold text-slate-800">{chart.title}</h2>
+                <p className="text-[10px] font-semibold text-slate-300 tracking-widest">Active data visualization</p>
               </div>
-              <button className="text-[12px] font-bold text-fuchsia-700 uppercase tracking-widest hover:underline decoration-2 underline-offset-4">Table</button>
             </div>
 
             {/* Legend */}
-            <div className="flex items-center justify-center gap-6 pb-2">
-              <div className="flex items-center gap-2"><div className="w-8 h-2.5 bg-teal-300 rounded-sm" /><span className="text-[12px] font-bold text-slate-500">Today</span></div>
-              <div className="flex items-center gap-2"><div className="w-8 h-2.5 bg-amber-200 rounded-sm" /><span className="text-[12px] font-bold text-slate-500">This Month</span></div>
-              <div className="flex items-center gap-2"><div className="w-8 h-2.5 bg-sky-300 rounded-sm" /><span className="text-[12px] font-bold text-slate-500">Lifetime</span></div>
+            <div className="flex items-center gap-6 border-b border-slate-50 pb-4">
+              <div className="flex items-center gap-2"><div className="w-2 h-2 bg-slate-900 rounded-full" /><span className="text-[10px] font-bold text-slate-400 capitalize">Today</span></div>
+              <div className="flex items-center gap-2"><div className="w-2 h-2 bg-slate-400 rounded-full" /><span className="text-[10px] font-bold text-slate-400 capitalize">Month</span></div>
+              <div className="flex items-center gap-2"><div className="w-2 h-2 bg-slate-200 rounded-full" /><span className="text-[10px] font-bold text-slate-400 capitalize">Session</span></div>
             </div>
 
             {/* Mock Chart Area */}
-            <div className="relative flex-1 mt-4 ml-8 border-l border-b border-slate-200 flex items-end">
+            <div className="relative flex-1 mt-4 ml-6 border-l border-b border-slate-100 flex items-end">
               {/* Y Axis labels */}
-              <div className="absolute -left-8 inset-y-0 w-6 flex flex-col justify-between text-[11px] font-medium text-slate-400 py-1">
-                <span>1.0</span><span>0.8</span><span>0.6</span><span>0.4</span><span>0.2</span><span>0</span>
+              <div className="absolute -left-8 inset-y-0 w-6 flex flex-col justify-between text-[10px] font-semibold text-slate-300 py-1">
+                <span>100</span><span>80</span><span>60</span><span>40</span><span>20</span><span>0</span>
               </div>
               
-              {/* Background grid lines */}
-              <div className="absolute inset-0 flex flex-col justify-between py-1 z-0 pointer-events-none">
-                {[...Array(6)].map((_, i) => <div key={i} className="w-full border-t border-slate-100" />)}
-              </div>
-
               {/* Mock Bars */}
               {chart.hasData && (
-                <div className="relative z-10 w-full flex items-end justify-center gap-[2px] h-full pb-0.5">
-                  <div className="w-20 bg-amber-200 h-full hover:bg-amber-300 transition-colors cursor-pointer" />
-                  <div className="w-20 bg-sky-300 h-full hover:bg-sky-400 transition-colors cursor-pointer" />
+                <div className="relative z-10 w-full flex items-end justify-center gap-3 h-full pb-1">
+                  <div className="w-full bg-slate-900 h-[60%] rounded-t-lg hover:opacity-80 transition-all cursor-pointer group relative">
+                     <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[10px] px-2 py-1 rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity">74.2%</div>
+                  </div>
+                  <div className="w-full bg-slate-400 h-[40%] rounded-t-lg hover:opacity-80 transition-all cursor-pointer group relative">
+                     <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[10px] px-2 py-1 rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity">42.1%</div>
+                  </div>
+                  <div className="w-full bg-slate-200 h-[90%] rounded-t-lg hover:opacity-80 transition-all cursor-pointer group relative">
+                     <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[10px] px-2 py-1 rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity">98.5%</div>
+                  </div>
                 </div>
-              )}
-              {chart.hasData && (
-                <div className="absolute -bottom-6 w-full text-center text-[13px] font-bold text-slate-500">HQ</div>
               )}
             </div>
           </div>
         ))}
       </div>
 
-      {/* Floating Continue Setup Widget */}
-      <div className="fixed bottom-6 right-6 lg:bottom-10 lg:right-10 z-50">
-        <button style={{ backgroundColor: '#2d7337' }} className="hover:opacity-90 text-white p-4 rounded-2xl shadow-xl shadow-emerald-900/20 flex items-center gap-4 transition-all group">
-          <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-xl">
-            🚀
-          </div>
-          <div className="text-left pr-4">
-            <h4 className="font-bold tracking-tight text-sm">Continue Setup</h4>
-            <p className="text-[10px] font-medium text-emerald-200 uppercase tracking-widest mt-0.5">60% complete • 3/5 tasks</p>
-          </div>
-          <div className="w-6 h-6 rounded-lg bg-white/20 flex items-center justify-center transition-colors">
-            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17l9.2-9.2M17 17V7H7"/></svg>
-          </div>
-        </button>
+    </div>
+  );
+}
+
+function ClientDashboardView({ user }: { user: any }) {
+  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState({
+    balance: 0,
+    lifetimeDeposits: 0,
+    loan: { amount: 0, status: "n/a" },
+    customer: null as any,
+    recentTransactions: [] as any[],
+    recentRequests: [] as any[],
+    branch: null as any
+  });
+
+  const tabs = ["Overview", "Requests", "Activity", "Profile"];
+
+  useEffect(() => {
+    async function fetchClientData() {
+      const email = user?.primaryEmailAddress?.emailAddress;
+      if (!email) return setLoading(false);
+
+      try {
+        const { data: customer } = await supabase
+          .from('customers')
+          .select('*, branches(*)')
+          .eq('email', email)
+          .single();
+
+        if (customer) {
+          const [txsResponse, reqsResponse] = await Promise.all([
+            supabase.from('transactions').select('*, employees(first_name, last_name)').eq('customer_id', customer.id).order('created_at', { ascending: false }),
+            supabase.from('client_requests').select('*').eq('customer_id', customer.id).order('created_at', { ascending: false }).limit(5)
+          ]);
+
+          const txs = (txsResponse.data || []).filter(tx => tx.status !== 'rejected' && tx.status !== 'denied');
+          const reqs = reqsResponse.data;
+
+          let balance = 0;
+          let lifetimeDeposits = 0;
+          let latestLoan = { amount: 0, status: "n/a" };
+
+          txs?.forEach(tx => {
+            const amt = Number(tx.amount || 0);
+            if (tx.type === 'Deposit') {
+              balance += amt;
+              lifetimeDeposits += amt;
+            }
+            if (tx.type === 'Withdrawal' || tx.type === 'Loan Payment') balance -= amt;
+            if (tx.type === 'Loan' && (latestLoan.status === "n/a" || latestLoan.status === "pending")) {
+               latestLoan = { amount: amt, status: tx.status || "pending" };
+            }
+          });
+
+          setData({ 
+            balance, 
+            lifetimeDeposits,
+            loan: latestLoan, 
+            customer, 
+            recentTransactions: txs?.slice(0, 5) || [],
+            recentRequests: reqs || [],
+            branch: customer.branches
+          });
+        }
+      } catch (err) {
+        console.error("Error fetching client data:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchClientData();
+  }, [user]);
+
+  if (loading) return (
+    <div className="h-64 flex items-center justify-center">
+      <div className="w-8 h-8 border-4 border-accent border-t-transparent rounded-full animate-spin"></div>
+    </div>
+  );
+
+  if (!data.customer) {
+    return (
+      <div className="w-full max-w-2xl mx-auto py-20 text-center space-y-6">
+        <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto text-slate-400">
+           <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" x2="19" y1="8" y2="14"/><line x1="16" x2="22" y1="11" y2="11"/></svg>
+        </div>
+        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Account Linking Pending</h1>
+        <p className="text-slate-500 font-medium leading-relaxed max-w-md mx-auto">
+          Welcome, <span className="font-bold text-slate-800">{user?.firstName}</span>! We couldn't find a customer record linked to your email.
+          Please contact your branch manager to activate your portal.
+        </p>
+        <div className="pt-6">
+          <Link href="/" className="px-8 py-3 bg-slate-900 text-white rounded-full font-bold text-xs tracking-widest hover:bg-black transition-all shadow-lg shadow-slate-200">Go Back Home</Link>
+        </div>
+      </div>
+    );
+  }
+
+  const timeline = [
+    ...data.recentTransactions.map(tx => ({ ...tx, timelineType: 'transaction' })),
+    ...data.recentRequests.map(req => ({ ...req, timelineType: 'request' }))
+  ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 8);
+
+  return (
+    <div className="w-full max-w-7xl mx-auto space-y-10 pb-20 font-sans animate-in fade-in duration-700">
+      
+      {/* Navigation Tabs */}
+      <div className="flex items-center gap-8 border-b border-slate-100 pb-1">
+        {tabs.map((tab) => (
+          <Link
+            key={tab}
+            href={
+              tab === "Overview" ? "/dashboard" :
+              tab === "Requests" ? "/dashboard/client/requests" :
+              tab === "Activity" ? "/dashboard/client/activity" :
+              "/dashboard/client/profile"
+            }
+            className={`pb-4 text-[13px] font-bold border-b-2 transition-all ${
+              tab === "Overview" 
+                ? "border-accent text-slate-900" 
+                : "border-transparent text-slate-400 hover:text-slate-600 hover:border-slate-200"
+            }`}
+          >
+            {tab}
+          </Link>
+        ))}
       </div>
 
+      {/* Financial Health Row */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        
+        {/* Balance Card */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between min-h-[160px]">
+          <div className="flex items-center justify-between mb-4">
+            <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-600">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+            </div>
+          </div>
+          <div className="space-y-1">
+            <p className="text-[11px] font-bold text-slate-400 tracking-widest uppercase">Balance</p>
+            <div className="flex items-baseline gap-2">
+              <span className="text-[32px] font-bold text-slate-900 tracking-tight">₵ {data.balance.toFixed(2)}</span>
+            </div>
+          </div>
+          <div className="mt-4 pt-4 border-t border-slate-50 flex items-center justify-between">
+            <div className="flex gap-4">
+              <div className="space-y-0.5">
+                <p className="text-[9px] font-bold text-slate-300 tracking-widest leading-none">Status</p>
+                <p className="text-[13px] font-bold text-green-500 tracking-tight">Active</p>
+              </div>
+            </div>
+            <Link 
+              href="/dashboard/client/requests?type=withdrawal"
+              className="text-[10px] font-black text-accent uppercase tracking-tighter hover:underline flex items-center gap-1"
+            >
+              Withdraw funds
+              <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+            </Link>
+          </div>
+        </div>
+
+        {/* Growth Card */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between min-h-[160px]">
+          <div className="flex items-center justify-between mb-4">
+            <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-600">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 7 13.5 15.5 8.5 10.5 2 17"/><path d="M16 7h6v6"/></svg>
+            </div>
+          </div>
+          <div className="space-y-1">
+            <p className="text-[11px] font-bold text-slate-400 tracking-widest uppercase">Growth facility</p>
+            <div className="flex items-baseline gap-2">
+              <span className="text-[32px] font-bold text-slate-900 tracking-tight">₵ {data.loan.amount.toFixed(0)}</span>
+              <span className="text-[10px] font-semibold text-accent bg-slate-50 px-2 py-0.5 rounded-full">{data.loan.status === 'n/a' ? 'Pre-filled' : data.loan.status}</span>
+            </div>
+          </div>
+          <div className="mt-4 pt-4 border-t border-slate-50 flex items-center justify-between">
+            <div className="flex gap-4">
+              <div className="space-y-0.5">
+                <p className="text-[9px] font-bold text-slate-300 tracking-widest leading-none">Eligibility</p>
+                <p className="text-[13px] font-bold text-slate-600 tracking-tight">Verified</p>
+              </div>
+            </div>
+            <Link 
+              href="/dashboard/client/requests?type=loan"
+              className="text-[10px] font-black text-accent uppercase tracking-tighter hover:underline flex items-center gap-1"
+            >
+              Request loan
+              <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+            </Link>
+          </div>
+        </div>
+
+        {/* Lifetime Deposits Card */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between min-h-[160px]">
+          <div className="flex items-center justify-between mb-4">
+            <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-600">
+               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>
+            </div>
+          </div>
+          <div className="space-y-1">
+            <p className="text-[11px] font-bold text-slate-400 tracking-widest uppercase">Lifetime Savings</p>
+            <div className="flex items-baseline gap-2">
+              <span className="text-[32px] font-bold text-slate-900 tracking-tight">₵ {data.lifetimeDeposits.toFixed(2)}</span>
+            </div>
+          </div>
+          <div className="mt-4 pt-4 border-t border-slate-50 flex items-center justify-between">
+            <div className="flex gap-4">
+              <div className="space-y-0.5">
+                <p className="text-[9px] font-bold text-slate-300 tracking-widest leading-none">Security</p>
+                <p className="text-[13px] font-bold text-slate-600 tracking-tight">Protected</p>
+              </div>
+            </div>
+            <Link 
+              href="/dashboard/client/requests?type=deposit"
+              className="text-[10px] font-black text-accent uppercase tracking-tighter hover:underline flex items-center gap-1"
+            >
+              Deposit more
+              <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+            </Link>
+          </div>
+        </div>
+
+        {/* Support/Quick Help Card */}
+        <div className="bg-slate-900 border border-slate-900 rounded-2xl p-6 shadow-xl flex flex-col justify-between min-h-[160px] text-white overflow-hidden relative">
+          <div className="absolute top-0 right-0 p-4 opacity-10">
+             <svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+          </div>
+          <p className="text-[11px] font-bold text-white/50 tracking-widest uppercase relative z-10">Direct assistance</p>
+          <div className="space-y-4 relative z-10">
+            <h2 className="text-[18px] font-bold tracking-tight">Need help with your account?</h2>
+            <Link 
+              href="/dashboard/client/support"
+              className="w-full py-3 bg-white text-slate-900 rounded-xl font-bold text-[11px] tracking-widest uppercase flex items-center justify-center gap-2 hover:bg-slate-50 transition-all text-center"
+            >
+              Open support link
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        {/* LEFT: Timeline & Activity */}
+        <div className="lg:col-span-2 space-y-8">
+           <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+              <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+                 <h3 className="text-[15px] font-bold text-slate-800">Account pulse matrix</h3>
+                 <div className="flex gap-1.5">
+                    <div className="w-1.5 h-1.5 bg-accent rounded-full" />
+                    <div className="w-1.5 h-1.5 bg-slate-100 rounded-full" />
+                 </div>
+              </div>
+              <div className="divide-y divide-slate-50 min-h-[400px]">
+                 {timeline.length === 0 ? (
+                    <div className="p-20 text-center text-slate-300 font-semibold tracking-widest text-[11px] uppercase">
+                       NO LOG ENTRY DETECTED WITHIN ACTIVE PARAMETERS.
+                    </div>
+                 ) : (
+                   timeline.map((item, i) => (
+                     <div key={i} className="p-6 flex items-center justify-between hover:bg-slate-50/80 transition-all group">
+                        <div className="flex items-center gap-5">
+                           <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                             item.type === 'Deposit' ? 'bg-green-50 text-green-600' : 'bg-slate-50 text-slate-600'
+                           }`}>
+                              {item.type === 'Deposit' ? (
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m16 12-4-4-4 4"/><path d="M12 16V8"/></svg>
+                              ) : (
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m8 12 4 4 4-4"/><path d="M12 8v8"/></svg>
+                              )}
+                           </div>
+                           <div className="space-y-0.5">
+                              <p className="text-[15px] font-bold text-slate-900 tracking-tight leading-none">
+                                {item.type}
+                              </p>
+                              <p className="text-[11px] font-bold text-slate-400 tracking-widest uppercase">
+                                {new Date(item.created_at).toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' })}
+                              </p>
+                           </div>
+                        </div>
+                        <div className="text-right flex flex-col items-end gap-2">
+                           <p className="text-[18px] font-bold text-slate-900 tracking-tight leading-none underline decoration-slate-100 underline-offset-4">
+                             ₵ {Number(item.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                           </p>
+                           <span className={`text-[9px] font-bold px-3 py-1 rounded-full uppercase tracking-widest ${
+                             item.status === 'rejected' || item.status === 'denied' || item.status === 'Failed' 
+                               ? 'bg-red-50 text-red-600' 
+                               : item.status === 'ok' || item.status === 'approved' || item.status === 'completed' || item.status === 'sent'
+                               ? 'bg-green-50 text-green-600'
+                               : 'bg-slate-50 text-slate-400'
+                           }`}>
+                             {item.status || "Verified"}
+                           </span>
+                        </div>
+                     </div>
+                   ))
+                 )}
+              </div>
+           </div>
+        </div>
+
+        {/* RIGHT: Portfolio Summaries */}
+        <div className="space-y-8">
+           
+           <div className="bg-white border border-slate-200 p-8 rounded-2xl shadow-sm space-y-6">
+              <h3 className="text-[13px] font-bold text-slate-400 tracking-widest uppercase">Balance overview</h3>
+              <div className="space-y-6">
+                 <div className="flex flex-col gap-1 p-4 rounded-xl hover:bg-slate-50 transition-colors group">
+                    <span className="text-[11px] font-bold text-slate-400 tracking-[0.1em] uppercase">Operating Wallet</span>
+                    <span className="text-[28px] font-bold text-slate-900 tracking-tight">₵ {data.balance.toFixed(2)}</span>
+                 </div>
+                 <div className="flex flex-col gap-1 p-4 rounded-xl hover:bg-slate-50 transition-colors group opacity-50">
+                    <span className="text-[11px] font-bold text-slate-300 tracking-[0.1em] uppercase">Growth Wallet</span>
+                    <span className="text-[28px] font-bold text-slate-300 tracking-tight">₵ 0.00</span>
+                 </div>
+                 
+                 <div className="pt-2">
+                    <Link href="/dashboard/client/activity" className="w-full py-4 border border-slate-100 bg-white rounded-2xl text-slate-600 font-bold text-[12px] flex items-center justify-center gap-2 transition-all hover:bg-slate-50 shadow-sm">
+                       Access detailed activity
+                       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                    </Link>
+                 </div>
+              </div>
+           </div>
+
+           <div className="bg-white border border-slate-200 rounded-2xl p-8 space-y-6 shadow-sm">
+              <h3 className="text-[13px] font-bold text-slate-400 tracking-widest uppercase">Branch connectivity</h3>
+              <div className="flex items-center gap-4">
+                 <div className="w-12 h-12 rounded-2xl bg-accent text-white flex items-center justify-center font-black text-xl">
+                    {data.branch?.name?.[0] || "M"}
+                 </div>
+                 <div>
+                    <p className="text-[15px] font-bold text-slate-900 leading-none mb-1">{data.branch?.name || "Main Terminal"}</p>
+                    <p className="text-[11px] font-bold text-slate-400 tracking-widest uppercase italic">Primary node</p>
+                 </div>
+              </div>
+              <div className="pt-4 border-t border-slate-50 flex items-center justify-between">
+                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Latency</span>
+                 <span className="text-[10px] font-bold text-green-500 bg-green-50 px-2 py-0.5 rounded-full uppercase tracking-tighter">Optimal</span>
+              </div>
+           </div>
+
+        </div>
+
+      </div>
     </div>
   );
 }

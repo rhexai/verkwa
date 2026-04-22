@@ -2,89 +2,156 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { useAuthSync } from "@/lib/hooks/useAuthSync";
+import { 
+  AreaChart, 
+  Area, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer,
+  defs,
+  linearGradient,
+  stop
+} from "recharts";
+import { format, subDays, eachDayOfInterval, startOfDay, isSameDay } from "date-fns";
 
 export default function ReportsPage() {
-  const tabs = ["HIGHLIGHT", "GENERATE"];
+  const { resolvedRole, employeeId, isSyncing } = useAuthSync();
+  const role = (resolvedRole || "").toLowerCase();
+  const isAdmin = ["administrator", "admin", "superadmin"].includes(role);
+  const isRestricted = !isAdmin && role !== "client" && role !== "";
+
+  const tabs = ["Highlight", "Generate"];
   const [loading, setLoading] = useState(true);
   const [reportData, setReportData] = useState({
     depositTotal: 0,
     withdrawalTotal: 0,
-    loanTotal: 0
+    loanTotal: 0,
+    commissionTotal: 0,
+    timeSeries: [] as any[]
   });
 
   useEffect(() => {
     async function fetchReportData() {
-      const { data: txs, error } = await supabase
-        .from('transactions')
-        .select('amount, type');
-      
-      if (error) {
-        console.error("Error fetching report data:", error);
-      } else {
+      try {
+        setLoading(true);
+        // Fetch last 30 days of transactions for trending
+        const thirtyDaysAgo = subDays(new Date(), 30).toISOString();
+        
+        let query = supabase
+          .from('transactions')
+          .select('amount, type, created_at')
+          .gte('created_at', thirtyDaysAgo)
+          .order('created_at', { ascending: true });
+
+        if (isRestricted && employeeId) {
+          query = query.eq('staff_id', employeeId);
+        }
+
+        const { data: txs, error } = await query;
+        
+        if (error) throw error;
+
+        // Create 30-day timeline
+        const days = eachDayOfInterval({
+          start: subDays(new Date(), 29),
+          end: new Date()
+        });
+
         let deposit = 0;
         let withdrawal = 0;
         let loan = 0;
+        let commission = 0;
 
-        txs?.forEach(tx => {
-          const amt = Number(tx.amount);
-          if (tx.type === 'Deposit') deposit += amt;
-          else if (tx.type === 'Withdrawal') withdrawal += amt;
-          // Note: Loans aren't fully modeled in the schema yet, but prepared for expansion
+        const timeSeries = days.map(day => {
+          const dateStr = format(day, "MMM dd");
+          let dayDeposit = 0;
+          let dayWithdrawal = 0;
+          let dayLoan = 0;
+          let dayCommission = 0;
+
+          txs?.forEach(tx => {
+            if (tx.status === 'rejected' || tx.status === 'denied') return; // Skip rejected/denied transactions
+            if (isSameDay(new Date(tx.created_at), day)) {
+              const amt = Number(tx.amount);
+              if (tx.type === 'Deposit') dayDeposit += amt;
+              else if (tx.type === 'Withdrawal') dayWithdrawal += amt;
+              else if (tx.type === 'Loan') dayLoan += amt;
+              else if (tx.type === 'Commission') dayCommission += amt;
+            }
+          });
+
+          deposit += dayDeposit;
+          withdrawal += dayWithdrawal;
+          loan += dayLoan;
+          commission += dayCommission;
+
+          return {
+            name: dateStr,
+            Deposit: dayDeposit,
+            Withdrawal: dayWithdrawal,
+            Loan: dayLoan,
+            Commission: dayCommission
+          };
         });
 
         setReportData({
           depositTotal: deposit,
           withdrawalTotal: withdrawal,
-          loanTotal: loan
+          loanTotal: loan,
+          commissionTotal: commission,
+          timeSeries
         });
+      } catch (err) {
+        console.error("Error fetching report data:", err);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     }
 
     fetchReportData();
-  }, []);
+  }, [resolvedRole, employeeId]);
 
   const charts = [
-    { title: "Deposit", total: reportData.depositTotal.toFixed(2), subtitle: "Total deposit", hasData: reportData.depositTotal > 0, color: "bg-[#8ed3cd]" },
-    { title: "Withdrawal", total: reportData.withdrawalTotal.toFixed(2), subtitle: "Total withdrawal", hasData: reportData.withdrawalTotal > 0, color: "bg-red-400" },
-    { title: "Loan", total: reportData.loanTotal.toFixed(2), subtitle: "Total loan", hasData: reportData.loanTotal > 0, color: "bg-amber-400" }
+    { title: "Deposit", total: reportData.depositTotal.toFixed(2), subtitle: "Daily volume (30d)", hasData: reportData.depositTotal > 0, color: "#2EB67D", dataKey: "Deposit" },
+    { title: "Withdrawal", total: reportData.withdrawalTotal.toFixed(2), subtitle: "Daily volume (30d)", hasData: reportData.withdrawalTotal > 0, color: "#F87171", dataKey: "Withdrawal" },
+    { title: "Loan", total: reportData.loanTotal.toFixed(2), subtitle: "Daily volume (30d)", hasData: reportData.loanTotal > 0, color: "#FBBF24", dataKey: "Loan" },
+    { title: "Revenue", total: reportData.commissionTotal.toFixed(2), subtitle: "Manual commissions (30d)", hasData: reportData.commissionTotal > 0, color: "#818CF8", dataKey: "Commission" }
   ];
 
   return (
-    <div className="w-full max-w-7xl mx-auto pb-20 space-y-6">
-      <div className="bg-white border border-[#e5e7eb] shadow-sm rounded-xl overflow-hidden">
+    <div className="w-full max-w-7xl mx-auto pb-20 space-y-8 font-sans animate-in fade-in duration-700">
+      <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
         
         {/* Tabs Row */}
-        <div className="flex items-center px-4 pt-4 border-b border-slate-200 gap-6">
+        <div className="flex items-center px-6 pt-4 border-b border-slate-50 gap-8">
           {tabs.map((tab, idx) => (
             <button 
               key={tab}
-              className={`pb-3 text-[13px] font-bold uppercase tracking-wide border-b-2 transition-colors ${
+              className={`pb-3 text-[13px] font-bold border-b-2 transition-colors ${
                 idx === 0 
-                ? "border-[#c14a42] text-[#c14a42]" 
-                : "border-transparent text-[#9e5256] hover:text-[#c14a42]"
+                ? "border-accent text-slate-900" 
+                : "border-transparent text-slate-400 hover:text-slate-600"
               }`}
             >
               {tab}
             </button>
           ))}
-          <button className="ml-auto mb-3 w-6 h-6 bg-[#fdecd5] text-[#b45309] rounded flex items-center justify-center font-black">
-            ›
-          </button>
         </div>
 
         {/* Highlight Summary Banner */}
-        <div className="p-6">
-          <div className="flex items-center gap-4">
-            {/* Multi-colored bar mini-icon */}
-            <div className="flex items-end gap-[3px] h-8">
-              <div className="w-2.5 h-4 bg-green-600 rounded-sm"></div>
-              <div className="w-2.5 h-6 bg-red-600 rounded-sm"></div>
-              <div className="w-2.5 h-8 bg-blue-600 rounded-sm"></div>
+        <div className="p-8 bg-slate-50/50">
+          <div className="flex items-center gap-5">
+            <div className="flex items-end gap-1 h-10">
+              <div className="w-2.5 h-6 bg-slate-200 rounded-full animate-pulse"></div>
+              <div className="w-2.5 h-10 bg-slate-600 rounded-full animate-pulse " style={{ animationDelay: '0.1s' }}></div>
+              <div className="w-2.5 h-8 bg-[#2EB67D] rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
             </div>
             <div>
-              <h2 className="text-xl font-bold text-slate-800 tracking-tight leading-tight">Daily Business Summary Report</h2>
-              <p className="text-[14px] font-bold text-slate-800">Date: today</p>
+              <h2 className="text-[20px] font-bold text-slate-900 tracking-tight leading-tight">Business intelligence summary</h2>
+              <p className="text-[12px] font-bold text-slate-400 tracking-widest mt-1 uppercase">Status: Live Analytics Engine Active</p>
             </div>
           </div>
         </div>
@@ -93,49 +160,77 @@ export default function ReportsPage() {
       {/* Charts Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {charts.map((chart, i) => (
-          <div key={i} className="bg-white border border-[#e5e7eb] rounded-xl shadow-sm flex flex-col h-[340px]">
-            <div className="p-5 flex items-start justify-between">
-              <h3 className="text-[15px] font-bold text-[#68adbb]">{chart.title}</h3>
-              <select className="px-3 py-1 bg-white border border-slate-300 rounded text-[13px] text-slate-600 focus:outline-none">
-                <option>today</option>
-              </select>
+          <div key={i} className="bg-white border border-slate-100 rounded-3xl shadow-sm flex flex-col h-[420px] overflow-hidden group hover:border-accent/20 transition-all">
+            <div className="p-8 flex items-start justify-between">
+               <div className="space-y-1">
+                  <h3 className="text-[16px] font-bold text-slate-900 tracking-tight">{chart.title} analytics</h3>
+                  <p className="text-[11px] font-bold text-slate-400 tracking-widest uppercase">{chart.subtitle}</p>
+               </div>
+               <div className="flex items-center gap-2">
+                 <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Real-time</span>
+               </div>
             </div>
 
-            <div className="px-6 flex flex-col items-end">
-              <span className="text-2xl font-black text-slate-800 leading-none">
-                {loading ? "..." : chart.total}
+            <div className="px-8 flex flex-col mb-4">
+              <span className="text-4xl font-bold text-slate-900 tracking-tighter">
+                {loading ? "..." : `₵ ${Number(chart.total).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
               </span>
-              <span className="text-[11px] font-semibold text-[#68adbb] mt-1">{chart.subtitle}</span>
             </div>
 
-            {/* Mock Chart Area */}
-            <div className="relative flex-1 border-l border-b border-slate-200 flex items-end ml-10 mr-6 mt-4 pb-1">
-              <div className="absolute -left-7 inset-y-0 flex flex-col justify-between text-[10px] text-[#94a3b8] py-1">
-                {chart.hasData ? (
-                  <><span>30</span><span>25</span><span>20</span><span>15</span><span>10</span><span>5</span><span>0</span></>
-                ) : (
-                  <><span>1.0</span><span>0.8</span><span>0.6</span><span>0.4</span><span>0.2</span><span>0</span></>
-                )}
-              </div>
-              
-              <div className="absolute inset-0 flex flex-col justify-between py-1 z-0 pointer-events-none">
-                {[...Array(6)].map((_, idx) => <div key={idx} className="w-full border-t border-slate-100" />)}
-              </div>
-
-              {chart.hasData && (
-                <div className="relative z-10 w-full flex items-end justify-center gap-[2px] h-full pr-16">
-                  <div className={`w-14 ${chart.color} h-full`} />
+            {/* Recharts Area */}
+            <div className="flex-1 w-full px-2">
+              {loading ? (
+                <div className="flex-1 flex items-center justify-center italic text-slate-300 text-xs font-medium h-full">
+                  Calculating trajectory...
+                </div>
+              ) : chart.hasData ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={reportData.timeSeries}>
+                    <defs>
+                      <linearGradient id={`color${chart.dataKey}`} x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={chart.color} stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor={chart.color} stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                    <XAxis 
+                      dataKey="name" 
+                      hide 
+                    />
+                    <YAxis hide domain={['auto', 'auto']} />
+                    <Tooltip 
+                      contentStyle={{ 
+                        borderRadius: '16px', 
+                        border: 'none', 
+                        boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)',
+                        fontSize: '11px',
+                        fontWeight: 'bold',
+                        padding: '12px'
+                      }}
+                      cursor={{ stroke: '#f0f0f0', strokeWidth: 2 }}
+                    />
+                    <Area 
+                      type="monotone" 
+                      dataKey={chart.dataKey} 
+                      stroke={chart.color} 
+                      strokeWidth={3}
+                      fillOpacity={1} 
+                      fill={`url(#color${chart.dataKey})`} 
+                      animationDuration={2000}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex-1 flex items-center justify-center italic text-slate-300 text-xs font-medium h-full">
+                   Insufficient data for 30-day visualization
                 </div>
               )}
-              
-              {/* x-axis dates */}
-              <div className="absolute -bottom-6 w-full flex justify-between text-[10px] text-slate-400 px-2">
-                <span>30 Mar 26</span><span>06 Apr 26</span><span>13 Apr 26</span><span>20 Apr 26</span><span>27 Apr 26</span>
-              </div>
             </div>
 
-            <div className="bg-[#f8f9fa] mt-8 px-6 py-3 border-t border-slate-100 rounded-b-xl">
-              <span className="text-[14px] font-bold text-[#68adbb]">Insight</span>
+            <div className="px-8 py-5 bg-slate-50/50 flex items-center justify-between mt-auto">
+              <span className="text-[12px] font-bold text-slate-500">View detailed audit trail</span>
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-slate-300 group-hover:text-accent transition-colors"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
             </div>
           </div>
         ))}
