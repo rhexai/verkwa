@@ -364,10 +364,10 @@ function TransactionsContent() {
         </div>
 
         {/* Summary Block */}
-        <div className="bg-[#2EB67D] px-10 py-10 flex flex-col lg:flex-row lg:items-center justify-between gap-10">
+        <div className="bg-[#2EB67D] px-6 md:px-10 py-6 md:py-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6 md:gap-10">
 
           
-          <div className="flex flex-wrap items-center gap-4">
+          <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-3 md:gap-4">
             {activeTab === "DEPOSITS" && (
               <>
                 <SummaryCard label="Total Volume" value={totals.amount} />
@@ -716,9 +716,9 @@ function TransactionsContent() {
 
 function SummaryCard({ label, value, isNumber = false, color = "text-white" }: { label: string, value: number, isNumber?: boolean, color?: string }) {
   return (
-    <div className={`p-6 bg-white/5 rounded-2xl border border-white/5 flex flex-col items-start min-w-[150px] group hover:bg-white/10 transition-all`}>
-      <span className="text-[9px] font-bold text-white/30 tracking-widest mb-1">{label}</span>
-      <span className={`text-[20px] font-bold tracking-tight ${color} leading-none`}>
+    <div className={`p-4 md:p-6 bg-white/5 rounded-xl md:rounded-2xl border border-white/5 flex flex-col items-start min-w-0 md:min-w-[150px] group hover:bg-white/10 transition-all`}>
+      <span className="text-[8px] md:text-[9px] font-bold text-white/30 tracking-widest mb-1 uppercase">{label}</span>
+      <span className={`text-[16px] md:text-[20px] font-bold tracking-tight ${color} leading-none`}>
         {isNumber ? value : `₵ ${value.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
       </span>
     </div>

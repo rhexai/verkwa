@@ -291,24 +291,24 @@ export default function AuthorizationsPage() {
                     <td className="px-8 py-6">
                        <p className="text-[18px] font-black text-slate-900 tracking-tight">₵ {Number(req.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
                     </td>
-                    <td className="px-8 py-6 text-right">
-                       <div className="flex items-center justify-end gap-3 opacity-100 transition-all">
-                          <button 
-                            onClick={() => handleAction(req.id, 'Reject')}
-                            disabled={!!processingId}
-                            className="h-10 px-5 bg-white border border-slate-200 rounded-xl text-[11px] font-black text-slate-400 hover:text-red-500 hover:border-red-200 tracking-widest uppercase transition-all disabled:opacity-50"
-                          >
-                             Deny
-                          </button>
-                          <button 
-                            onClick={() => handleAction(req.id, 'Approve')}
-                            disabled={!!processingId}
-                            className="h-10 px-6 bg-[#2EB67D] text-white rounded-xl text-[11px] font-black tracking-widest uppercase shadow-lg shadow-green-100 hover:bg-[#259465] hover:scale-105 transition-all active:scale-95 disabled:opacity-50"
-                          >
-                             {processingId === req.id ? 'Syncing...' : 'Approve'}
-                          </button>
-                       </div>
-                    </td>
+                     <td className="px-8 py-6 text-right">
+                        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-end gap-2 md:gap-3 opacity-100 transition-all">
+                           <button 
+                             onClick={() => handleAction(req.id, 'Reject')}
+                             disabled={!!processingId}
+                             className="h-9 md:h-10 px-4 md:px-5 bg-white border border-slate-200 rounded-lg md:rounded-xl text-[10px] md:text-[11px] font-black text-slate-400 hover:text-red-500 hover:border-red-200 tracking-widest uppercase transition-all disabled:opacity-50"
+                           >
+                              Deny
+                           </button>
+                           <button 
+                             onClick={() => handleAction(req.id, 'Approve')}
+                             disabled={!!processingId}
+                             className="h-9 md:h-10 px-4 md:px-6 bg-[#2EB67D] text-white rounded-lg md:rounded-xl text-[10px] md:text-[11px] font-black tracking-widest uppercase shadow-lg shadow-green-100 hover:bg-[#259465] transition-all disabled:opacity-50"
+                           >
+                              {processingId === req.id ? 'Syncing...' : 'Approve'}
+                           </button>
+                        </div>
+                     </td>
                   </tr>
                 ))
               )}

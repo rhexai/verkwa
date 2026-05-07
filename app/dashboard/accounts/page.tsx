@@ -157,11 +157,11 @@ export default function AccountsPage() {
           <table className="w-full text-left">
             <thead>
               <tr className="bg-slate-50/50">
-                <th className="px-8 py-4 text-[11px] font-bold text-slate-400 tracking-widest">ID</th>
-                <th className="px-8 py-4 text-[11px] font-bold text-slate-400 tracking-widest">Account #</th>
-                <th className="px-8 py-4 text-[11px] font-bold text-slate-400 tracking-widest">Customer name</th>
-                <th className="px-8 py-4 text-[11px] font-bold text-slate-400 tracking-widest">Status</th>
-                <th className="px-8 py-4 text-[11px] font-bold text-slate-400 tracking-widest text-right">Actions</th>
+                <th className="hidden md:table-cell px-8 py-4 text-[11px] font-bold text-slate-400 tracking-widest uppercase">ID</th>
+                <th className="px-6 md:px-8 py-4 text-[11px] font-bold text-slate-400 tracking-widest uppercase">Account</th>
+                <th className="px-6 md:px-8 py-4 text-[11px] font-bold text-slate-400 tracking-widest uppercase">Customer</th>
+                <th className="hidden sm:table-cell px-8 py-4 text-[11px] font-bold text-slate-400 tracking-widest uppercase">Status</th>
+                <th className="px-6 md:px-8 py-4 text-[11px] font-bold text-slate-400 tracking-widest uppercase text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -183,7 +183,7 @@ export default function AccountsPage() {
               ) : (
                 records.map((rec, i) => (
                   <tr key={rec.id || i} className="hover:bg-slate-50/80 transition-colors group">
-                    <td className="px-8 py-4">
+                    <td className="hidden md:table-cell px-8 py-4">
                       <div className="w-10 h-10 bg-slate-50 rounded-lg flex items-center justify-center text-slate-400 overflow-hidden shadow-sm">
                         {rec.photo_url ? (
                           <img src={rec.photo_url} alt="User" className="w-full h-full object-cover grayscale transition-all duration-500 hover:grayscale-0" />
@@ -192,31 +192,31 @@ export default function AccountsPage() {
                         )}
                       </div>
                     </td>
-                    <td className="px-8 py-4 font-bold text-[14px] text-slate-900 tracking-tight">{rec.account_num}</td>
-                    <td className="px-8 py-4">
-                       <p className="font-bold text-[14px] text-slate-900">{rec.last_name} {rec.first_name}</p>
-                       <p className="text-[11px] font-medium text-slate-400">Handled by {rec.employees ? rec.employees.first_name : "System"}</p>
+                    <td className="px-6 md:px-8 py-4 font-bold text-[13px] md:text-[14px] text-slate-900 tracking-tight">{rec.account_num}</td>
+                    <td className="px-6 md:px-8 py-4">
+                       <p className="font-bold text-[13px] md:text-[14px] text-slate-900">{rec.last_name} {rec.first_name}</p>
+                       <p className="text-[10px] md:text-[11px] font-medium text-slate-400">Handled by {rec.employees ? rec.employees.first_name : "System"}</p>
                     </td>
-                    <td className="px-8 py-4">
+                    <td className="hidden sm:table-cell px-8 py-4">
                        <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${rec.status === 'Active' ? 'bg-green-50 text-green-600' : 'bg-slate-50 text-slate-400'}`}>
                           <span className={`mr-1.5 inline-block w-1.5 h-1.5 rounded-full ${rec.status === 'Active' ? 'bg-green-500' : 'bg-slate-300'}`} />
                           {rec.status}
                        </span>
                     </td>
-                    <td className="px-8 py-4">
-                      <div className="flex items-center justify-end gap-2 text-right">
+                    <td className="px-6 md:px-8 py-4">
+                      <div className="flex items-center justify-end gap-1.5 md:gap-2 text-right">
                         <button 
                           onClick={() => {
                             setSelectedCustomer(rec);
                             setIsDrawerOpen(true);
                           }}
-                          className="px-4 py-1.5 bg-white border border-slate-200 rounded-full text-[11px] font-bold text-slate-600 hover:bg-slate-50 transition-all shadow-sm"
+                          className="px-3 md:px-4 py-1.5 bg-white border border-slate-200 rounded-full text-[10px] md:text-[11px] font-bold text-slate-600 hover:bg-slate-50 transition-all shadow-sm"
                         >
                           View
                         </button>
                         <Link 
                           href={`/dashboard/accounts/add?id=${rec.id}`}
-                          className="px-4 py-1.5 bg-white border border-slate-200 rounded-full text-[11px] font-bold text-slate-400 hover:border-slate-900 hover:text-slate-900 transition-all shadow-sm"
+                          className="px-3 md:px-4 py-1.5 bg-white border border-slate-200 rounded-full text-[10px] md:text-[11px] font-bold text-slate-400 hover:border-slate-900 hover:text-slate-900 transition-all shadow-sm"
                         >
                           Edit
                         </Link>

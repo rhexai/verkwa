@@ -198,7 +198,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Hero Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
         {heroStats.map((stat, i) => (
           <div key={i} className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between min-h-[160px]">
             <div className="flex items-center justify-between mb-4">
@@ -211,10 +211,10 @@ export default function DashboardPage() {
             </div>
 
             <div className="space-y-1">
-              <p className="text-[11px] font-bold text-slate-400 tracking-widest uppercase">{stat.title}</p>
+              <p className="text-[10px] md:text-[11px] font-bold text-slate-400 tracking-widest uppercase">{stat.title}</p>
               <div className="flex items-baseline gap-2">
-                <span className="text-[32px] font-bold text-slate-900 tracking-tight">{stat.lifetime}</span>
-                <span className="text-[10px] font-semibold text-accent bg-slate-50 px-2 py-0.5 rounded-full">Lifetime</span>
+                <span className="text-[28px] md:text-[32px] font-bold text-slate-900 tracking-tight">{stat.lifetime}</span>
+                <span className="text-[9px] md:text-[10px] font-semibold text-accent bg-slate-50 px-2 py-0.5 rounded-full">Lifetime</span>
               </div>
             </div>
 
@@ -333,13 +333,13 @@ export default function DashboardPage() {
       )}
 
       {/* General Summaries Grid */}
-      <div className="bg-white border border-slate-200 p-8 rounded-2xl shadow-sm space-y-6">
-        <h2 className="text-[13px] font-bold text-slate-400 tracking-widest">Global parameters</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-6">
+      <div className="bg-white border border-slate-200 p-6 md:p-8 rounded-2xl shadow-sm space-y-6">
+        <h2 className="text-[11px] md:text-[13px] font-bold text-slate-400 tracking-widest uppercase">Global parameters</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 md:gap-6">
           {generalStats.map((stat, i) => (
             <div key={i} className="flex flex-col items-start p-4 rounded-xl hover:bg-slate-50 transition-colors group">
-              <span className="text-[28px] font-bold text-slate-900 tracking-tight mb-1">{stat.value}</span>
-              <span className="text-[9px] font-bold text-slate-400 tracking-[0.2em]">{stat.label}</span>
+              <span className="text-[24px] md:text-[28px] font-bold text-slate-900 tracking-tight mb-1">{stat.value}</span>
+              <span className="text-[8px] md:text-[9px] font-bold text-slate-400 tracking-[0.2em] uppercase">{stat.label}</span>
             </div>
           ))}
         </div>
@@ -517,7 +517,7 @@ function ClientDashboardView({ user }: { user: any }) {
       </div>
 
       {/* Financial Health Row */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
         
         {/* Balance Card */}
         <div className="lg:col-span-2 bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between min-h-[160px]">
@@ -527,9 +527,9 @@ function ClientDashboardView({ user }: { user: any }) {
             </div>
           </div>
           <div className="space-y-1">
-            <p className="text-[11px] font-bold text-slate-400 tracking-widest uppercase">Balance</p>
+            <p className="text-[10px] md:text-[11px] font-bold text-slate-400 tracking-widest uppercase">Balance</p>
             <div className="flex items-baseline gap-2">
-              <span className="text-[32px] font-bold text-slate-900 tracking-tight">₵ {data.balance.toFixed(2)}</span>
+              <span className="text-[28px] md:text-[32px] font-bold text-slate-900 tracking-tight">₵ {data.balance.toFixed(2)}</span>
             </div>
           </div>
           <div className="mt-4 pt-4 border-t border-slate-50 flex items-center justify-between">
@@ -636,8 +636,8 @@ function ClientDashboardView({ user }: { user: any }) {
                               </p>
                            </div>
                         </div>
-                        <div className="text-right flex flex-col items-end gap-2">
-                           <p className="text-[18px] font-bold text-slate-900 tracking-tight leading-none underline decoration-slate-100 underline-offset-4">
+                        <div className="text-right flex flex-col items-end gap-1.5 md:gap-2">
+                           <p className="text-[15px] md:text-[18px] font-bold text-slate-900 tracking-tight leading-none underline decoration-slate-100 underline-offset-4">
                              ₵ {Number(item.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                            </p>
                            <span className={`text-[9px] font-bold px-3 py-1 rounded-full uppercase tracking-widest ${

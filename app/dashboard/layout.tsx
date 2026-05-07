@@ -104,10 +104,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}
       `}>
         {/* Logo Area */}
-        <div className="h-20 flex items-center px-8 border-b border-slate-50">
+        <div className="h-16 md:h-20 flex items-center px-6 md:px-8 border-b border-slate-50">
           <div className="flex items-center gap-3">
-            <div className="w-20 h-20 flex items-center justify-center overflow-visible -ml-5">
-               <img src="/images/logo.png" alt="Verkwa Logo" className="w-full h-full object-contain scale-125" />
+            <div className="w-16 h-16 md:w-20 md:h-20 flex items-center justify-center overflow-visible -ml-3 md:-ml-5">
+               <img src="/images/logo.png" alt="Verkwa Logo" className="w-full h-full object-contain scale-125 md:scale-150" />
             </div>
           </div>
         </div>
@@ -202,27 +202,29 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
               {/* QUICK ACTIONS DROPDOWN */}
               {isQuickActionOpen && (
-                <div className="absolute right-0 mt-4 w-64 bg-white border border-border-subtle shadow-xl rounded-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200 origin-top-right">
-                  <div className="p-3 grid grid-cols-1 gap-1">
-                    <div className="px-3 py-2 text-[10px] font-black text-slate-400 tracking-widest">Quick actions</div>
-                    {quickActions.map((action) => (
-                      <Link 
-                        key={action.name}
-                        href={action.href}
-                        onClick={() => setIsQuickActionOpen(false)}
-                        className="flex items-center gap-3 px-3 py-3 hover:bg-slate-50 rounded-xl transition-all group"
-                      >
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors bg-slate-50 group-hover:bg-accent group-hover:text-white ${action.color}`}>
-                          {action.icon === 'deposit' && <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="m16 12-4 4-4-4"/><path d="M12 8v8"/></svg>}
-                          {action.icon === 'withdrawal' && <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="m8 12 4-4 4 4"/><path d="M12 16V8"/></svg>}
-                          {action.icon === 'loan-req' && <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 15h2a2 2 0 1 0 0-4h-3c-1.1 0-2-.9-2-2s.9-2 2-2h2"/><path d="M12 5v14"/><path d="M7 15l-3-3 3-3"/><path d="M17 9l3 3-3 3"/></svg>}
-                          {action.icon === 'loan-pay' && <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 12h.01"/><path d="M16 6V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><path d="M22 13a10 10 0 1 1-20 0"/><path d="m15 13-3 3-3-3"/></svg>}
-                          {action.icon === 'complaint' && <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8Z"/><path d="M15 3v5h5"/><path d="m7 11 2 2 4-4"/></svg>}
-                          {action.icon === 'user-plus' && <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" x2="19" y1="8" y2="14"/><line x1="22" x2="16" y1="11" y2="11"/></svg>}
-                        </div>
-                        <span className="text-[12px] font-semibold text-slate-700">{action.name}</span>
-                      </Link>
-                    ))}
+                <div className="fixed md:absolute right-4 md:right-0 mt-4 w-[calc(100vw-32px)] md:w-64 bg-white border border-border-subtle shadow-2xl rounded-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200 origin-top-right">
+                  <div className="p-4 md:p-3 grid grid-cols-1 gap-1">
+                    <div className="px-3 py-2 text-[10px] font-black text-slate-400 tracking-widest uppercase">Quick actions</div>
+                    <div className="grid grid-cols-2 md:grid-cols-1 gap-2 md:gap-1">
+                      {quickActions.map((action) => (
+                        <Link 
+                          key={action.name}
+                          href={action.href}
+                          onClick={() => setIsQuickActionOpen(false)}
+                          className="flex items-center gap-3 px-3 py-3 hover:bg-slate-50 rounded-xl transition-all group border border-slate-50 md:border-transparent"
+                        >
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors bg-slate-50 group-hover:bg-accent group-hover:text-white ${action.color}`}>
+                            {action.icon === 'deposit' && <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="m16 12-4 4-4-4"/><path d="M12 8v8"/></svg>}
+                            {action.icon === 'withdrawal' && <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="m8 12 4-4 4 4"/><path d="M12 16V8"/></svg>}
+                            {action.icon === 'loan-req' && <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 15h2a2 2 0 1 0 0-4h-3c-1.1 0-2-.9-2-2s.9-2 2-2h2"/><path d="M12 5v14"/><path d="M7 15l-3-3 3-3"/><path d="M17 9l3 3-3 3"/></svg>}
+                            {action.icon === 'loan-pay' && <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 12h.01"/><path d="M16 6V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><path d="M22 13a10 10 0 1 1-20 0"/><path d="m15 13-3 3-3-3"/></svg>}
+                            {action.icon === 'complaint' && <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8Z"/><path d="M15 3v5h5"/><path d="m7 11 2 2 4-4"/></svg>}
+                            {action.icon === 'user-plus' && <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" x2="19" y1="8" y2="14"/><line x1="22" x2="16" y1="11" y2="11"/></svg>}
+                          </div>
+                          <span className="text-[11px] md:text-[12px] font-bold text-slate-700">{action.name}</span>
+                        </Link>
+                      ))}
+                    </div>
                   </div>
                 </div>
               )}
