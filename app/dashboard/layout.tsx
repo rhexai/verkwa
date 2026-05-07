@@ -13,23 +13,24 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Use resolvedRole from Supabase fallback if available, otherwise Clerk metadata
-  const role = resolvedRole || (user?.publicMetadata?.role as string) || "client";
+  const roleRaw = resolvedRole || (user?.publicMetadata?.role as string) || "client";
+  const role = roleRaw.toLowerCase();
   const isClient = role === "client";
   
   // Specific role flags
-  const isSuperadmin = role === "superadmin" || role === "Administrator" || role === "Superadmin";
-  const isAdmin = ["Administrator", "admin", "superadmin", "Superadmin"].includes(role);
-  const isManager = role === "Manager" || role === "manager";
-  const isOperator = role === "Operator" || role === "operator";
-  const isMobilizer = role === "Mobilizer" || role === "mobilizer";
+  const isSuperadmin = role === "superadmin";
+  const isAdmin = ["administrator", "admin", "superadmin"].includes(role);
+  const isManager = role === "manager";
+  const isOperator = role === "operator";
+  const isMobilizer = role === "mobilizer";
 
   // Permission groups
-  const isStaff = ["Administrator", "Manager", "Operator", "Mobilizer", "admin", "superadmin", "employee", "manager", "operator", "mobilizer", "Superadmin"].includes(role);
-  const canManageAccounts = ["Administrator", "Manager", "Operator", "admin", "superadmin", "Superadmin"].includes(role);
-  const canViewTransactions = ["Administrator", "Manager", "Operator", "admin", "superadmin", "Superadmin"].includes(role);
-  const canManageBusiness = ["Administrator", "Manager", "admin", "superadmin", "Superadmin"].includes(role);
-  const canManageAccess = ["Administrator", "admin", "superadmin", "Superadmin"].includes(role);
-  const canViewAccounting = ["Administrator", "admin", "superadmin", "Superadmin"].includes(role);
+  const isStaff = ["administrator", "manager", "operator", "mobilizer", "admin", "superadmin", "employee"].includes(role);
+  const canManageAccounts = ["administrator", "manager", "operator", "admin", "superadmin"].includes(role);
+  const canViewTransactions = ["administrator", "manager", "operator", "admin", "superadmin"].includes(role);
+  const canManageBusiness = ["administrator", "manager", "admin", "superadmin"].includes(role);
+  const canManageAccess = ["administrator", "admin", "superadmin"].includes(role);
+  const canViewAccounting = ["administrator", "admin", "superadmin"].includes(role);
 
   const clientLinks = [
     { name: "Account history", href: "/dashboard/client/activity", icon: "receipt", visible: true },

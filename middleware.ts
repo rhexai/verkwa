@@ -22,13 +22,16 @@ export default clerkMiddleware(async (auth, req) => {
   if (isProtectedRoute(req)) {
     await auth.protect();
 
+    const roleRaw = (sessionClaims as any)?.metadata?.role || "";
+    const role = roleRaw.toLowerCase();
+
     // Redirect Superadmin-only routes
     if (isSuperadminRoute(req) && role !== 'superadmin') {
       return NextResponse.redirect(new URL('/dashboard', req.url));
     }
 
     // Redirect Admin-only routes
-    if (isAdminRoute(req) && role !== 'admin' && role !== 'superadmin') {
+    if (isAdminRoute(req) && role !== 'admin' && role !== 'superadmin' && role !== 'administrator') {
       return NextResponse.redirect(new URL('/dashboard', req.url));
     }
 

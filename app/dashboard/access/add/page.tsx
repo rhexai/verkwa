@@ -3,9 +3,15 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { useUser } from "@clerk/nextjs";
+import { PRIMARY_SUPERADMIN_EMAIL } from "@/lib/constants";
 import Link from "next/link";
 
 export default function AddEmployeePage() {
+  const { user } = useUser();
+  const currentUserEmail = user?.primaryEmailAddress?.emailAddress;
+  const isPrimaryAdmin = currentUserEmail === PRIMARY_SUPERADMIN_EMAIL;
+  
   const router = useRouter();
   const tabs = ["Access"];
   const [activeTab, setActiveTab] = useState("ACCESS");
@@ -32,6 +38,12 @@ export default function AddEmployeePage() {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+
+    if (formData.role === "Superadmin" && !isPrimaryAdmin) {
+      alert("Unauthorized: Only the primary superadmin can assign the Superadmin role.");
+      setLoading(false);
+      return;
+    }
 
     const { error } = await supabase
       .from('employees')
@@ -122,7 +134,7 @@ export default function AddEmployeePage() {
               <option value="Mobilizer">Mobilizer</option>
               <option value="Operator">Operator</option>
               <option value="Administrator">Administrator</option>
-              <option value="Superadmin">Superadmin</option>
+              {isPrimaryAdmin && <option value="Superadmin">Superadmin</option>}
             </select>
             <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>

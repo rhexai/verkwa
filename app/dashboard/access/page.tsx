@@ -2,8 +2,13 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { useUser } from "@clerk/nextjs";
+import { PRIMARY_SUPERADMIN_EMAIL } from "@/lib/constants";
 
 export default function AccessControlPage() {
+  const { user } = useUser();
+  const currentUserEmail = user?.primaryEmailAddress?.emailAddress;
+  const isPrimaryAdmin = currentUserEmail === PRIMARY_SUPERADMIN_EMAIL;
   const tabs = ["Staff"];
   const [records, setRecords] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,6 +53,12 @@ export default function AccessControlPage() {
     if (!selectedStaff) return;
     setSaving(true);
     
+    if (selectedStaff.role === "Superadmin" && !isPrimaryAdmin) {
+      alert("Unauthorized: Only the primary superadmin can assign the Superadmin role.");
+      setSaving(false);
+      return;
+    }
+
     const { error } = await supabase
       .from('employees')
       .update({
@@ -178,15 +189,17 @@ export default function AccessControlPage() {
                     </td>
                     <td className="px-8 py-4">
                       <div className="flex items-center justify-end gap-2 text-right">
-                        <button 
-                          onClick={() => {
-                            setSelectedStaff({ ...rec });
-                            setIsDrawerOpen(true);
-                          }}
-                          className="px-4 py-1.5 bg-white border border-slate-200 rounded-full text-[11px] font-bold text-slate-600 hover:bg-slate-50 transition-all"
-                        >
-                          Manage
-                        </button>
+                        {(isPrimaryAdmin || rec.role?.toLowerCase() !== 'superadmin') && (
+                          <button 
+                            onClick={() => {
+                              setSelectedStaff({ ...rec });
+                              setIsDrawerOpen(true);
+                            }}
+                            className="px-4 py-1.5 bg-white border border-slate-200 rounded-full text-[11px] font-bold text-slate-600 hover:bg-slate-50 transition-all"
+                          >
+                            Manage
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -250,7 +263,7 @@ export default function AccessControlPage() {
                         <option value="Manager">Manager</option>
                         <option value="Mobilizer">Mobilizer</option>
                         <option value="Administrator">Administrator</option>
-                        <option value="Superadmin">Superadmin</option>
+                        {isPrimaryAdmin && <option value="Superadmin">Superadmin</option>}
                     </select>
                 </div>
 
