@@ -3,7 +3,7 @@ import { Roles } from "@/types/roles";
 
 export const getRole = async () => {
   const { sessionClaims } = await auth();
-  return sessionClaims?.metadata.role as Roles | undefined;
+  return (sessionClaims as any)?.metadata?.role as Roles | undefined;
 };
 
 export const checkRole = async (role: Roles) => {

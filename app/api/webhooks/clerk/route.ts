@@ -48,11 +48,13 @@ export async function POST(req: Request) {
   }
 
   // Handle the event
-  const { id, email_addresses } = evt.data;
   const eventType = evt.type;
-  const email = email_addresses?.[0]?.email_address;
 
-  if (eventType === 'user.created' && email) {
+  if (eventType === 'user.created') {
+    const { id, email_addresses } = evt.data;
+    const email = email_addresses?.[0]?.email_address;
+    
+    if (email) {
     const client = await clerkClient();
     let assignedRole = 'client';
 
@@ -94,6 +96,7 @@ export async function POST(req: Request) {
         role: assignedRole,
       },
     });
+    }
   }
 
   return new Response('', { status: 200 });

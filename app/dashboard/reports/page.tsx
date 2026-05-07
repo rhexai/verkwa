@@ -12,9 +12,6 @@ import {
   CartesianGrid, 
   Tooltip, 
   ResponsiveContainer,
-  defs,
-  linearGradient,
-  stop
 } from "recharts";
 import { format, subDays, eachDayOfInterval, startOfDay, isSameDay } from "date-fns";
 

@@ -11,7 +11,7 @@ const isSuperadminRoute = createRouteMatcher(['/dashboard/system(.*)']);
 
 export default clerkMiddleware(async (auth, req) => {
   const { userId, sessionClaims } = await auth();
-  const role = sessionClaims?.metadata?.role;
+  const role = (sessionClaims as any)?.metadata?.role;
 
   // 1. If user is logged in and tries to access the home page, redirect to dashboard
   if (userId && req.nextUrl.pathname === '/') {
