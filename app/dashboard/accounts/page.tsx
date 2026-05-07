@@ -21,6 +21,7 @@ export default function AccountsPage() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [customerTransactions, setCustomerTransactions] = useState<any[]>([]);
   const [fetchingTxs, setFetchingTxs] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (isDrawerOpen && selectedCustomer) {
@@ -84,6 +85,35 @@ export default function AccountsPage() {
 
     fetchCustomers();
   }, [page, resolvedRole, employeeId]);
+  
+  const handleCustomerDelete = async () => {
+    if (!selectedCustomer) return;
+    if (!isAdmin) {
+      alert("Unauthorized: Only administrators can delete customer records.");
+      return;
+    }
+    
+    if (!window.confirm(`Are you sure you want to PERMANENTLY delete ${selectedCustomer.first_name} ${selectedCustomer.last_name}? This will remove all their transaction history and cannot be undone.`)) return;
+    
+    setDeleting(true);
+    const { error } = await supabase
+      .from('customers')
+      .delete()
+      .eq('id', selectedCustomer.id);
+      
+    if (error) {
+      if (error.code === '23503') {
+        alert("Cannot delete this customer because they have transaction records. You must delete their transactions first, or simply deactivate their account status.");
+      } else {
+        alert("Error deleting customer: " + error.message);
+      }
+    } else {
+      setIsDrawerOpen(false);
+      // Refresh the page
+      setRecords(prev => prev.filter(r => r.id !== selectedCustomer.id));
+    }
+    setDeleting(false);
+  };
 
   return (
     <div className="w-full max-w-7xl mx-auto space-y-6 pb-20 font-sans">
@@ -332,6 +362,16 @@ export default function AccountsPage() {
                 >
                   Close
                 </button>
+                
+                {isAdmin && (
+                  <button 
+                    onClick={handleCustomerDelete}
+                    disabled={deleting}
+                    className="w-full mt-4 py-4 bg-white border border-red-100 text-red-500 rounded-2xl font-bold text-[13px] hover:bg-red-50 transition-all disabled:opacity-50"
+                  >
+                    {deleting ? "Deleting..." : "Delete Customer Record"}
+                  </button>
+                )}
               </div>
             </div>
           </div>

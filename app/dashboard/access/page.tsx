@@ -16,6 +16,7 @@ export default function AccessControlPage() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [branches, setBranches] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   async function fetchEmployees() {
     try {
@@ -76,6 +77,29 @@ export default function AccessControlPage() {
       fetchEmployees();
     }
     setSaving(false);
+  };
+  
+  const handleStaffDelete = async () => {
+    if (!selectedStaff) return;
+    if (!window.confirm(`Are you sure you want to PERMANENTLY delete ${selectedStaff.first_name}? This cannot be undone.`)) return;
+    
+    setDeleting(true);
+    const { error } = await supabase
+      .from('employees')
+      .delete()
+      .eq('id', selectedStaff.id);
+      
+    if (error) {
+      if (error.code === '23503') {
+        alert("Cannot delete staff member because they are linked to existing transactions or records. Please deactivate their account instead.");
+      } else {
+        alert("Error deleting staff: " + error.message);
+      }
+    } else {
+      setIsDrawerOpen(false);
+      fetchEmployees();
+    }
+    setDeleting(false);
   };
 
   return (
@@ -301,6 +325,15 @@ export default function AccessControlPage() {
                   className="w-full py-4 bg-[#2EB67D] text-white rounded-2xl font-bold text-[13px] hover:bg-[#259465] transition-all disabled:opacity-50 shadow-xl shadow-slate-200"
                 >
                   {saving ? "Processing..." : "Save"}
+                </button>
+                
+                <button 
+                  type="button"
+                  onClick={handleStaffDelete}
+                  disabled={deleting}
+                  className="w-full mt-4 py-4 bg-white border border-red-100 text-red-500 rounded-2xl font-bold text-[13px] hover:bg-red-50 transition-all disabled:opacity-50"
+                >
+                  {deleting ? "Deleting..." : "Delete staff record"}
                 </button>
               </div>
             </form>

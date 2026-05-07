@@ -25,26 +25,31 @@ export default clerkMiddleware(async (auth, req) => {
     const roleRaw = (sessionClaims as any)?.metadata?.role || "";
     const role = roleRaw.toLowerCase();
 
-    // Redirect Superadmin-only routes
+    const isClient = role === 'client';
+
+    // 2. Redirect Superadmin-only routes (System)
     if (isSuperadminRoute(req) && role !== 'superadmin') {
       return NextResponse.redirect(new URL('/dashboard', req.url));
     }
 
-    // Redirect Admin-only routes
-    if (isAdminRoute(req) && role !== 'admin' && role !== 'superadmin' && role !== 'administrator') {
-      return NextResponse.redirect(new URL('/dashboard', req.url));
-    }
-
-    // Redirect Clients away from staff pages
+    // 3. Redirect Clients away from staff pages
     const isStaffRoute = createRouteMatcher([
+      '/dashboard/settings(.*)', 
+      '/dashboard/accounting(.*)', 
+      '/dashboard/access(.*)',
       '/dashboard/accounts(.*)', 
       '/dashboard/transactions(.*)', 
       '/dashboard/reports(.*)',
       '/dashboard/business(.*)',
       '/dashboard/ledgers(.*)'
     ]);
-    if (isStaffRoute(req) && role === 'client') {
-      return NextResponse.redirect(new URL('/dashboard', req.url));
+    
+    if (isStaffRoute(req) && (isClient || !role)) {
+       // Only redirect if they are explicitly a client
+       // If they have NO role yet, let the client-side handle it
+       if (isClient) {
+         return NextResponse.redirect(new URL('/dashboard', req.url));
+       }
     }
   }
 });
