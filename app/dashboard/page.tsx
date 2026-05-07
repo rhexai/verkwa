@@ -119,9 +119,9 @@ export default function DashboardPage() {
   const heroStats = [
     { 
       title: "Account", 
-      today: ((stats?.financials?.deposits?.today ?? 0) + (stats?.financials?.revenue?.today ?? 0) - (stats?.financials?.withdrawals?.today ?? 0)).toFixed(2), 
-      month: ((stats?.financials?.deposits?.month ?? 0) + (stats?.financials?.revenue?.month ?? 0) - (stats?.financials?.withdrawals?.month ?? 0)).toFixed(2), 
-      lifetime: ((stats?.financials?.deposits?.total ?? 0) + (stats?.financials?.revenue?.total ?? 0) - (stats?.financials?.withdrawals?.total ?? 0)).toFixed(2), 
+      today: ((stats?.financials?.deposits?.today ?? 0) - (stats?.financials?.withdrawals?.today ?? 0)).toFixed(2), 
+      month: ((stats?.financials?.deposits?.month ?? 0) - (stats?.financials?.withdrawals?.month ?? 0)).toFixed(2), 
+      lifetime: ((stats?.financials?.deposits?.total ?? 0) - (stats?.financials?.withdrawals?.total ?? 0)).toFixed(2), 
       icon: "coins", 
       visible: canViewFinancials,
       link: "/dashboard/ledgers",
@@ -402,6 +402,7 @@ function ClientDashboardView({ user }: { user: any }) {
   const [data, setData] = useState({
     balance: 0,
     lifetimeDeposits: 0,
+    reservedBalance: 0,
     loan: { amount: 0, status: "n/a" },
     customer: null as any,
     recentTransactions: [] as any[],
@@ -451,6 +452,7 @@ function ClientDashboardView({ user }: { user: any }) {
           setData({ 
             balance, 
             lifetimeDeposits,
+            reservedBalance: customer.reserved_balance || 0,
             loan: latestLoan, 
             customer, 
             recentTransactions: txs?.slice(0, 5) || [],
@@ -523,10 +525,10 @@ function ClientDashboardView({ user }: { user: any }) {
       </div>
 
       {/* Financial Health Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         
         {/* Balance Card */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between min-h-[160px]">
+        <div className="lg:col-span-2 bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between min-h-[160px]">
           <div className="flex items-center justify-between mb-4">
             <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-600">
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
@@ -555,39 +557,8 @@ function ClientDashboardView({ user }: { user: any }) {
           </div>
         </div>
 
-        {/* Growth Card */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between min-h-[160px]">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-600">
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 7 13.5 15.5 8.5 10.5 2 17"/><path d="M16 7h6v6"/></svg>
-            </div>
-          </div>
-          <div className="space-y-1">
-            <p className="text-[11px] font-bold text-slate-400 tracking-widest uppercase">Growth account</p>
-            <div className="flex items-baseline gap-2">
-              <span className="text-[32px] font-bold text-slate-900 tracking-tight">₵ {data.loan.amount.toFixed(0)}</span>
-              <span className="text-[10px] font-semibold text-accent bg-slate-50 px-2 py-0.5 rounded-full">{data.loan.status === 'n/a' ? 'Pre-filled' : data.loan.status}</span>
-            </div>
-          </div>
-          <div className="mt-4 pt-4 border-t border-slate-50 flex items-center justify-between">
-            <div className="flex gap-4">
-              <div className="space-y-0.5">
-                <p className="text-[9px] font-bold text-slate-300 tracking-widest leading-none">Eligibility</p>
-                <p className="text-[13px] font-bold text-slate-600 tracking-tight">Verified</p>
-              </div>
-            </div>
-            <Link 
-              href="/dashboard/client/requests?type=loan"
-              className="text-[10px] font-black text-accent uppercase tracking-tighter hover:underline flex items-center gap-1"
-            >
-              Request loan
-              <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
-            </Link>
-          </div>
-        </div>
-
         {/* Lifetime Deposits Card */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between min-h-[160px]">
+        <div className="lg:col-span-1 bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between min-h-[160px]">
           <div className="flex items-center justify-between mb-4">
             <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-600">
                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>
@@ -617,7 +588,7 @@ function ClientDashboardView({ user }: { user: any }) {
         </div>
 
         {/* Support/Quick Help Card */}
-        <div className="bg-accent border border-accent rounded-2xl p-6 shadow-xl flex flex-col justify-between min-h-[160px] text-white overflow-hidden relative">
+        <div className="lg:col-span-1 bg-accent border border-accent rounded-2xl p-6 shadow-xl flex flex-col justify-between min-h-[160px] text-white overflow-hidden relative">
           <div className="absolute top-0 right-0 p-4 opacity-10">
              <svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
           </div>
@@ -640,7 +611,7 @@ function ClientDashboardView({ user }: { user: any }) {
         <div className="lg:col-span-2 space-y-8">
            <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
               <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-                 <h3 className="text-[15px] font-bold text-slate-800">Account pulse matrix</h3>
+                 <h3 className="text-[15px] font-bold text-slate-800">Account activity</h3>
                  <div className="flex gap-1.5">
                     <div className="w-1.5 h-1.5 bg-accent rounded-full" />
                     <div className="w-1.5 h-1.5 bg-slate-100 rounded-full" />
@@ -703,10 +674,6 @@ function ClientDashboardView({ user }: { user: any }) {
                  <div className="flex flex-col gap-1 p-4 rounded-xl hover:bg-slate-50 transition-colors group">
                     <span className="text-[11px] font-bold text-slate-400 tracking-[0.1em] uppercase">Operating Wallet</span>
                     <span className="text-[28px] font-bold text-slate-900 tracking-tight">₵ {data.balance.toFixed(2)}</span>
-                 </div>
-                 <div className="flex flex-col gap-1 p-4 rounded-xl hover:bg-slate-50 transition-colors group opacity-50">
-                    <span className="text-[11px] font-bold text-slate-300 tracking-[0.1em] uppercase">Growth Wallet</span>
-                    <span className="text-[28px] font-bold text-slate-300 tracking-tight">₵ 0.00</span>
                  </div>
                  
                  <div className="pt-2">

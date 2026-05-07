@@ -5,7 +5,7 @@ ALTER TABLE public.transactions DROP CONSTRAINT IF EXISTS transactions_type_chec
 
 ALTER TABLE public.transactions 
 ADD CONSTRAINT transactions_type_check 
-CHECK (type IN ('Deposit', 'Withdrawal', 'Loan', 'Loan Payment', 'Commission', 'Service Fee', 'Interest', 'Other Income'));
+CHECK (type IN ('Deposit', 'Withdrawal', 'Loan', 'Loan Payment', 'Commission', 'Service Fee', 'Interest', 'Other Income', 'Reserve', 'Release'));
 
 -- Ensure columns exist for ledger context
 ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS deposit_by TEXT;

@@ -15,7 +15,7 @@ BEGIN
             COALESCE(SUM(CASE WHEN type = 'Deposit' THEN amount ELSE 0 END), 0) as total_deposits,
             COALESCE(SUM(CASE WHEN type = 'Withdrawal' THEN amount ELSE 0 END), 0) as total_withdrawals,
             COALESCE(SUM(CASE WHEN type = 'Loan' THEN amount ELSE 0 END), 0) as total_loans,
-            COALESCE(SUM(CASE WHEN type = 'Commission' THEN amount ELSE 0 END), 0) as total_revenue
+            COALESCE(SUM(CASE WHEN type IN ('Commission', 'Service Fee', 'Interest', 'Other Income') THEN amount ELSE 0 END), 0) as total_revenue
         FROM transactions
         WHERE (p_employee_id IS NULL OR staff_id = p_employee_id)
           AND status NOT IN ('rejected', 'denied')
@@ -25,7 +25,7 @@ BEGIN
             COALESCE(SUM(CASE WHEN type = 'Deposit' THEN amount ELSE 0 END), 0) as month_deposits,
             COALESCE(SUM(CASE WHEN type = 'Withdrawal' THEN amount ELSE 0 END), 0) as month_withdrawals,
             COALESCE(SUM(CASE WHEN type = 'Loan' THEN amount ELSE 0 END), 0) as month_loans,
-            COALESCE(SUM(CASE WHEN type = 'Commission' THEN amount ELSE 0 END), 0) as month_revenue
+            COALESCE(SUM(CASE WHEN type IN ('Commission', 'Service Fee', 'Interest', 'Other Income') THEN amount ELSE 0 END), 0) as month_revenue
         FROM transactions
         WHERE (p_employee_id IS NULL OR staff_id = p_employee_id)
           AND status NOT IN ('rejected', 'denied')
@@ -36,7 +36,7 @@ BEGIN
             COALESCE(SUM(CASE WHEN type = 'Deposit' THEN amount ELSE 0 END), 0) as today_deposits,
             COALESCE(SUM(CASE WHEN type = 'Withdrawal' THEN amount ELSE 0 END), 0) as today_withdrawals,
             COALESCE(SUM(CASE WHEN type = 'Loan' THEN amount ELSE 0 END), 0) as today_loans,
-            COALESCE(SUM(CASE WHEN type = 'Commission' THEN amount ELSE 0 END), 0) as today_revenue
+            COALESCE(SUM(CASE WHEN type IN ('Commission', 'Service Fee', 'Interest', 'Other Income') THEN amount ELSE 0 END), 0) as today_revenue
         FROM transactions
         WHERE (p_employee_id IS NULL OR staff_id = p_employee_id)
           AND status NOT IN ('rejected', 'denied')
@@ -100,7 +100,11 @@ BEGIN
             'rejected_count', COUNT(*) FILTER (WHERE status IN ('rejected', 'denied', 'failed'))
         ) INTO result
         FROM transactions
-        WHERE (p_type IS NULL OR type = p_type)
+        WHERE (
+            p_type IS NULL 
+            OR (p_type = 'REVENUE' AND type IN ('Commission', 'Service Fee', 'Interest', 'Other Income'))
+            OR type = p_type
+          )
           AND (p_employee_id IS NULL OR staff_id = p_employee_id)
           AND status NOT IN ('rejected', 'denied', 'failed');
     END IF;
@@ -122,7 +126,7 @@ BEGIN
             COALESCE(SUM(CASE WHEN type = 'Deposit' THEN amount ELSE 0 END), 0) as deposit,
             COALESCE(SUM(CASE WHEN type = 'Withdrawal' THEN amount ELSE 0 END), 0) as withdrawal,
             COALESCE(SUM(CASE WHEN type = 'Loan' THEN amount ELSE 0 END), 0) as loan,
-            COALESCE(SUM(CASE WHEN type = 'Commission' THEN amount ELSE 0 END), 0) as commission
+            COALESCE(SUM(CASE WHEN type IN ('Commission', 'Service Fee', 'Interest', 'Other Income') THEN amount ELSE 0 END), 0) as commission
         FROM transactions
         WHERE created_at >= CURRENT_DATE - (p_days || ' days')::INTERVAL
           AND (p_employee_id IS NULL OR staff_id = p_employee_id)

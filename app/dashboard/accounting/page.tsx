@@ -10,13 +10,27 @@ export default function AccountingPage() {
   const role = (resolvedRole || "").toLowerCase();
   const isAdmin = ["administrator", "admin", "superadmin"].includes(role);
   const isRestricted = !isAdmin && role !== "client" && role !== "";
+  
   const [loading, setLoading] = useState(true);
   const [financials, setFinancials] = useState({
     income: 0,
     expenses: 0,
-    cashOnHand: 0
+    cashOnHand: 0,
+    reservedCapital: 0
   });
   const [recentEntries, setRecentEntries] = useState<any[]>([]);
+  
+  // Reserve Management State
+  const [isReserveModalOpen, setIsReserveModalOpen] = useState(false);
+  const [branches, setBranches] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [reserveFormData, setReserveFormData] = useState({
+    amount: "",
+    type: "Reserve" as "Reserve" | "Release",
+    branch_id: "",
+    details: ""
+  });
 
   useEffect(() => {
     async function fetchAccountingData() {
@@ -28,20 +42,34 @@ export default function AccountingPage() {
 
         if (error) throw error;
 
-        const income = rpcData.financials.revenue.total;
-        const expenses = rpcData.financials.withdrawals.total;
+        const income = rpcData?.financials?.revenue?.total || 0;
+        const expenses = rpcData?.financials?.withdrawals?.total || 0;
+
+        // Fetch total reserved capital from transactions (system-wide)
+        const { data: resData } = await supabase
+          .from('transactions')
+          .select('amount, type')
+          .in('type', ['Reserve', 'Release'])
+          .in('status', ['ok', 'approved', 'completed', 'sent']);
+        
+        const totalReserved = (resData || []).reduce((acc: number, curr: any) => {
+          if (curr.type === 'Reserve') return acc + Number(curr.amount);
+          if (curr.type === 'Release') return acc - Number(curr.amount);
+          return acc;
+        }, 0);
 
         setFinancials({
           income,
           expenses,
-          cashOnHand: income - expenses
+          cashOnHand: income - expenses - totalReserved, // Subtracted reserved capital from operational income
+          reservedCapital: totalReserved
         });
 
         // Fetch recent operational entries
         const { data: entries } = await supabase
           .from('transactions')
           .select('*, branches(name)')
-          .ilike('deposit_by', 'INCOME%') // Strictly only show manual income/admin entries
+          .or('deposit_by.ilike.INCOME%,deposit_by.ilike.RESERVE%') // Show both income and reserve transfers
           .order('created_at', { ascending: false })
           .limit(5);
         
@@ -57,6 +85,44 @@ export default function AccountingPage() {
     if (!isSyncing && (!isRestricted || employeeId)) fetchAccountingData();
   }, [isSyncing, isRestricted, employeeId]);
 
+  useEffect(() => {
+    async function fetchMetadata() {
+      const { data: bData } = await supabase.from('branches').select('*');
+      const { data: cData } = await supabase.from('customers').select('id, first_name, last_name, account_num').order('last_name');
+      setBranches(bData || []);
+      setCustomers(cData || []);
+      if (bData?.[0]) setReserveFormData(prev => ({ ...prev, branch_id: bData[0].id }));
+    }
+    fetchMetadata();
+  }, []);
+
+  const handleReserveSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reserveFormData.amount) return alert("Please fill all required fields");
+    
+    setSubmitting(true);
+    try {
+      const { error } = await supabase.from('transactions').insert([{
+        amount: Number(reserveFormData.amount),
+        type: reserveFormData.type,
+        branch_id: reserveFormData.branch_id,
+        staff_id: employeeId,
+        deposit_by: `RESERVE | ${reserveFormData.type}: ${reserveFormData.details}`,
+        status: 'completed'
+      }]);
+
+      if (error) throw error;
+      
+      setIsReserveModalOpen(false);
+      setReserveFormData(prev => ({ ...prev, amount: "", details: "" }));
+      // Refresh data
+      window.location.reload();
+    } catch (err: any) {
+      alert("Error: " + err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <div className="w-full max-w-7xl mx-auto space-y-12 pb-20 font-sans animate-in fade-in duration-700">
@@ -67,6 +133,13 @@ export default function AccountingPage() {
           <p className="text-slate-400 font-bold text-[11px] tracking-widest uppercase">Manage system revenue and operational expenses</p>
         </div>
         <div className="flex items-center gap-3">
+           <button 
+             onClick={() => setIsReserveModalOpen(true)}
+             className="px-6 py-3 bg-white border border-slate-200 text-slate-900 rounded-2xl font-bold text-xs shadow-sm hover:bg-slate-50 transition-all flex items-center gap-2"
+           >
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/></svg>
+              Manage reserve
+           </button>
            <Link href="/dashboard/ledgers" className="px-6 py-3 bg-slate-900 text-white rounded-2xl font-bold text-xs shadow-xl shadow-slate-200 hover:bg-slate-800 transition-all flex items-center gap-2">
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
               Register income
@@ -99,12 +172,14 @@ export default function AccountingPage() {
               <p className="text-[24px] font-bold text-white tracking-tight leading-none">₵ {financials.income.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
            </div>
            <div className="p-8 bg-white/10 rounded-3xl border border-white/20 hover:bg-white/20 transition-all group">
-              <p className="text-[9px] font-bold text-white tracking-widest mb-2 uppercase opacity-60">Total liabilities</p>
+              <p className="text-[9px] font-bold text-white tracking-widest mb-2 uppercase opacity-60">Total withdrawals</p>
               <p className="text-[24px] font-bold text-white tracking-tight leading-none">₵ {financials.expenses.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
            </div>
            <div className="p-8 bg-white/10 rounded-3xl border border-white/20 hover:bg-white/20 transition-all group">
               <p className="text-[9px] font-bold text-white tracking-widest mb-2 uppercase opacity-80">Reserved capital</p>
-              <p className="text-[24px] font-bold text-white tracking-tight leading-none">₵ 124,500.00</p>
+              <p className="text-[24px] font-bold text-white tracking-tight leading-none">
+                ₵ {loading ? "..." : financials.reservedCapital.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+              </p>
            </div>
         </div>
       </div>
@@ -144,8 +219,8 @@ export default function AccountingPage() {
                                  <span className="px-3 py-1 bg-slate-100 text-slate-500 rounded-lg text-[9px] font-black tracking-widest uppercase">{entry.branches?.name || "System"}</span>
                               </td>
                               <td className="px-8 py-5 text-right">
-                                 <p className={`text-[14px] font-black tracking-tight ${entry.type === 'Withdrawal' ? 'text-red-500' : 'text-[#2EB67D]'}`}>
-                                    {entry.type === 'Withdrawal' ? '-' : '+'}₵ {entry.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                 <p className={`text-[14px] font-black tracking-tight ${entry.type === 'Withdrawal' || entry.type === 'Reserve' ? 'text-red-500' : 'text-[#2EB67D]'}`}>
+                                    {entry.type === 'Withdrawal' || entry.type === 'Reserve' ? '-' : '+'}₵ {entry.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                  </p>
                               </td>
                            </tr>
@@ -187,6 +262,80 @@ export default function AccountingPage() {
          </div>
       </div>
 
+      {/* Reserve Modal */}
+      {isReserveModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+           <div className="bg-white w-full max-w-lg border border-slate-100 shadow-2xl rounded-3xl overflow-hidden animate-in zoom-in-95 duration-300">
+              <div className="p-10 space-y-10">
+                 <div className="flex items-center justify-between border-b border-slate-50 pb-8">
+                    <h2 className="text-[24px] font-bold text-slate-900 tracking-tight leading-none">Reserved Capital</h2>
+                    <button onClick={() => setIsReserveModalOpen(false)} className="w-10 h-10 border border-slate-100 rounded-full flex items-center justify-center text-slate-300 hover:border-slate-900 hover:text-slate-900 transition-all font-bold text-lg">✕</button>
+                 </div>
+
+                 <form onSubmit={handleReserveSubmit} className="space-y-8">
+                    <div className="grid grid-cols-2 gap-4 p-1 bg-slate-100 rounded-2xl">
+                        <button 
+                          type="button"
+                          onClick={() => setReserveFormData({...reserveFormData, type: 'Reserve'})}
+                          className={`py-3 rounded-xl text-xs font-bold transition-all ${reserveFormData.type === 'Reserve' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                        >
+                          Reserve Funds
+                        </button>
+                        <button 
+                          type="button"
+                          onClick={() => setReserveFormData({...reserveFormData, type: 'Release'})}
+                          className={`py-3 rounded-xl text-xs font-bold transition-all ${reserveFormData.type === 'Release' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                        >
+                          Release Funds
+                        </button>
+                    </div>
+
+                    <div className="space-y-3">
+                       <label className="text-[10px] font-black text-slate-900 tracking-widest uppercase">Amount (₵)</label>
+                       <input 
+                         type="number" 
+                         required
+                         value={reserveFormData.amount}
+                         onChange={(e) => setReserveFormData({...reserveFormData, amount: e.target.value})}
+                         placeholder="0.00"
+                         className="w-full px-8 py-5 bg-slate-50 border border-slate-100 rounded-2xl text-[20px] font-bold text-slate-900 focus:outline-none focus:border-accent transition-all placeholder:text-slate-200"
+                       />
+                    </div>
+
+                    <div className="space-y-3">
+                       <label className="text-[10px] font-black text-slate-900 tracking-widest uppercase">Source Branch</label>
+                       <select 
+                         required
+                         value={reserveFormData.branch_id}
+                         onChange={(e) => setReserveFormData({...reserveFormData, branch_id: e.target.value})}
+                         className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold focus:outline-none focus:border-accent transition-all appearance-none"
+                       >
+                          {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                       </select>
+                    </div>
+
+                    <div className="space-y-3">
+                       <label className="text-[10px] font-black text-slate-900 tracking-widest uppercase">Allocation Notes</label>
+                       <textarea 
+                         value={reserveFormData.details}
+                         onChange={(e) => setReserveFormData({...reserveFormData, details: e.target.value})}
+                         placeholder="Context for this allocation..."
+                         className="w-full px-8 py-5 bg-slate-50 border border-slate-100 rounded-2xl text-[14px] font-medium text-slate-600 focus:outline-none focus:border-accent transition-all placeholder:text-slate-200 h-24 resize-none"
+                       />
+                    </div>
+
+                    <button 
+                      type="submit"
+                      disabled={submitting}
+                      className="w-full py-5 bg-slate-900 text-white font-bold text-[11px] tracking-widest uppercase rounded-2xl shadow-xl shadow-slate-200 hover:bg-slate-800 transition-all active:scale-[0.98] disabled:opacity-50"
+                    >
+                       {submitting ? "Processing..." : "Confirm Allocation"}
+                    </button>
+                 </form>
+              </div>
+           </div>
+        </div>
+      )}
     </div>
   );
 }

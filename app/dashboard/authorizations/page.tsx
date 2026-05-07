@@ -285,7 +285,7 @@ export default function AuthorizationsPage() {
                                Paid
                              </span>
                           )}
-                          <p className="text-[11px] font-medium text-slate-500 italic max-w-[200px] line-clamp-1">"{req.details || 'No context provided'}"</p>
+                          <p className="text-[11px] font-medium text-slate-500 italic max-w-[200px] line-clamp-1">"{req.details || 'No reason provided'}"</p>
                        </div>
                     </td>
                     <td className="px-8 py-6">

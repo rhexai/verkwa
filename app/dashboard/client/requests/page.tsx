@@ -97,14 +97,14 @@ export default function ClientRequestsPage() {
         throw new Error("Account context lost. Please refresh the page.");
       }
 
-      if (formData.type === "Deposit" && paystackRef) {
+      if ((formData.type === "Deposit" || formData.type === "Reserve") && paystackRef) {
         // Direct insertion to transactions for Paystack deposits to immediately update balance
         const txPayload = {
           customer_id: customer.id,
           amount: parseFloat(formData.amount) || 0,
-          type: 'Deposit',
+          type: formData.type,
           status: 'approved',
-          deposit_by: `Paystack: ${paystackRef}`,
+          deposit_by: formData.type === "Reserve" ? `Internal: Reserved Capital Move` : `Paystack: ${paystackRef}`,
           branch_id: customer.branch_id || null
         };
         
@@ -221,7 +221,7 @@ export default function ClientRequestsPage() {
                        <div>
                           <p className="text-[16px] font-bold text-slate-900 tracking-tight leading-none mb-2">{req.type} authorization</p>
                           <p className="text-[10px] font-bold text-slate-400 tracking-widest uppercase mb-4 leading-none">Logref: {req.id?.slice(0,12)} • {new Date(req.created_at).toLocaleDateString()}</p>
-                          <p className="text-[12px] font-medium text-slate-500 line-clamp-1 italic tracking-tight">"{req.details || 'Unspecified context'}"</p>
+                          <p className="text-[12px] font-medium text-slate-500 line-clamp-1 italic tracking-tight">"{req.details || 'No reason provided'}"</p>
                        </div>
                     </div>
                     <div className="flex flex-col items-end gap-3 shrink-0">
@@ -262,7 +262,7 @@ export default function ClientRequestsPage() {
                 <div className="space-y-4">
                    <label className="text-[11px] font-bold text-slate-400 tracking-widest uppercase ml-1">Protocol classification</label>
                    <div className="grid grid-cols-3 gap-0 border border-slate-100 rounded-2xl overflow-hidden shadow-sm">
-                      {["Withdrawal", "Deposit", "Loan"].map(t => (
+                      {["Withdrawal", "Deposit", "Reserve"].map(t => (
                         <button 
                           key={t}
                           type="button"
