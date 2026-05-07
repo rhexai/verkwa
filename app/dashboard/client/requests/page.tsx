@@ -209,7 +209,7 @@ export default function ClientRequestsPage() {
                    <div className="w-16 h-16 border border-slate-100 rounded-2xl flex items-center justify-center text-slate-200">
                       <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
                    </div>
-                   <p className="text-slate-300 font-bold tracking-widest text-[11px]">Pending request(s)</p>
+                   <p className="text-slate-300 font-bold tracking-widest text-[11px]">No data found</p>
                 </div>
               ) : (
                 requests.map((req, i) => (
@@ -278,7 +278,7 @@ export default function ClientRequestsPage() {
                 </div>
 
                 <div className="space-y-4">
-                   <label className="text-[11px] font-bold text-slate-400 tracking-widest uppercase ml-1">Quantum (₵)</label>
+                   <label className="text-[11px] font-bold text-slate-400 tracking-widest uppercase ml-1">Amount (₵)</label>
                    <input 
                       type="number"
                       required

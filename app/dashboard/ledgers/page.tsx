@@ -84,7 +84,7 @@ export default function LedgersPage() {
       // Proceed even if employee ID isn't found to avoid blocking the workflow
       const { error } = await supabase.from('transactions').insert([{
         amount: Number(formData.amount),
-        type: 'Deposit', 
+        type: 'Commission', 
         deposit_by: `INCOME | ${formData.type}: ${formData.details}`,
         branch_id: formData.branch_id,
         staff_id: finalEmployeeId || null,

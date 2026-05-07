@@ -175,16 +175,16 @@ export default function ClientActivityPage() {
                <tr className="bg-slate-50/50">
                  <th className="px-8 py-5 text-[11px] font-bold text-slate-400 tracking-widest uppercase">Transaction</th>
                  <th className="px-8 py-5 text-[11px] font-bold text-slate-400 tracking-widest uppercase">Classification</th>
-                 <th className="px-8 py-5 text-[11px] font-bold text-slate-400 tracking-widest text-right uppercase">Quantum</th>
-                 <th className="px-8 py-5 text-[11px] font-bold text-slate-400 tracking-widest uppercase">Operative</th>
+                 <th className="px-8 py-5 text-[11px] font-bold text-slate-400 tracking-widest uppercase">Amount</th>
+                 <th className="px-8 py-5 text-[11px] font-bold text-slate-400 tracking-widest uppercase">Agent</th>
                  <th className="px-8 py-5 text-[11px] font-bold text-slate-400 tracking-widest text-right uppercase">Status</th>
                </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
               {filteredTransactions.length === 0 ? (
                 <tr>
-                   <td colSpan={5} className="px-8 py-32 text-center text-slate-300 font-bold uppercase tracking-widest text-[11px] italic">
-                      No matching records in current ledger
+                   <td colSpan={5} className="px-8 py-32 text-center text-slate-300 font-bold tracking-widest text-[11px]">
+                      No matching records found
                    </td>
                 </tr>
               ) : (

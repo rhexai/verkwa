@@ -344,7 +344,7 @@ function TransactionsContent() {
                   <>
                     <th className="px-8 py-4 text-[11px] font-bold text-slate-400 tracking-widest">Customer</th>
                     <th className="px-8 py-4 text-[11px] font-bold text-slate-400 tracking-widest text-right">Repayment</th>
-                    <th className="px-8 py-4 text-[11px] font-bold text-slate-400 tracking-widest">Operative</th>
+                    <th className="px-8 py-4 text-[11px] font-bold text-slate-400 tracking-widest">Agent</th>
                   </>
                 ) : activeTab === "Loans" ? (
                   <>
@@ -357,7 +357,7 @@ function TransactionsContent() {
                     <th className="px-8 py-4 text-[11px] font-bold text-slate-400 tracking-widest">Customer</th>
                     <th className="px-8 py-4 text-[11px] font-bold text-slate-400 tracking-widest text-right">Amount</th>
                     <th className="px-8 py-4 text-[11px] font-bold text-slate-400 tracking-widest">Status</th>
-                    <th className="px-8 py-4 text-[11px] font-bold text-slate-400 tracking-widest">Operative</th>
+                    <th className="px-8 py-4 text-[11px] font-bold text-slate-400 tracking-widest">Agent</th>
                   </>
                 )}
                 
@@ -395,7 +395,7 @@ function TransactionsContent() {
                     {activeTab === "COMMISSIONS" ? (
                       <>
                         <td className="px-8 py-4">
-                           <p className="text-[14px] font-bold text-slate-800">{rec.customers ? `${rec.customers.last_name}, ${rec.customers.first_name}` : "System Log"}</p>
+                           <p className="text-[14px] font-bold text-slate-800">{rec.customers ? `${rec.customers.last_name}, ${rec.customers.first_name}` : "Admin"}</p>
                            <p className="text-[11px] font-medium text-slate-400">{rec.customers?.account_num}</p>
                         </td>
                         <td className="px-8 py-4 text-right">
@@ -406,7 +406,7 @@ function TransactionsContent() {
                     ) : activeTab === "LOAN PAYMENTS" ? (
                       <>
                         <td className="px-8 py-4">
-                           <p className="text-[14px] font-bold text-slate-800">{rec.customers ? `${rec.customers.last_name}, ${rec.customers.first_name}` : "System Log"}</p>
+                           <p className="text-[14px] font-bold text-slate-800">{rec.customers ? `${rec.customers.last_name}, ${rec.customers.first_name}` : "Admin"}</p>
                            <p className="text-[11px] font-medium text-slate-400">{rec.customers?.account_num}</p>
                         </td>
                         <td className="px-8 py-4 text-right">
@@ -419,7 +419,7 @@ function TransactionsContent() {
                     ) : activeTab === "LOANS" ? (
                       <>
                         <td className="px-8 py-4">
-                           <p className="text-[14px] font-bold text-slate-800">{rec.customers ? `${rec.customers.last_name}, ${rec.customers.first_name}` : "System Log"}</p>
+                           <p className="text-[14px] font-bold text-slate-800">{rec.customers ? `${rec.customers.last_name}, ${rec.customers.first_name}` : "Admin"}</p>
                            <p className="text-[11px] font-medium text-slate-400">{rec.customers?.account_num}</p>
                         </td>
                         <td className="px-8 py-4 text-right">
@@ -440,7 +440,7 @@ function TransactionsContent() {
                     ) : (
                       <>
                         <td className="px-8 py-4">
-                           <p className="text-[14px] font-bold text-slate-800">{rec.customers ? `${rec.customers.last_name}, ${rec.customers.first_name}` : "System Log"}</p>
+                           <p className="text-[14px] font-bold text-slate-800">{rec.customers ? `${rec.customers.last_name}, ${rec.customers.first_name}` : "Admin"}</p>
                            <p className="text-[11px] font-medium text-slate-400">{rec.customers?.account_num}</p>
                         </td>
                         <td className="px-8 py-4 text-right">
