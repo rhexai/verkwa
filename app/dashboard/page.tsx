@@ -317,7 +317,7 @@ export default function DashboardPage() {
                 {stats.staffPerformance.length === 0 ? (
                   <tr>
                     <td colSpan={4} className="px-8 py-16 text-center text-slate-300 font-semibold tracking-widest text-[11px]">
-                      No operative data logged in current session
+                      No data found.
                     </td>
                   </tr>
                 ) : (

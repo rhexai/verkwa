@@ -250,6 +250,7 @@ export default function AccessControlPage() {
                         <option value="Manager">Manager</option>
                         <option value="Mobilizer">Mobilizer</option>
                         <option value="Administrator">Administrator</option>
+                        <option value="Superadmin">Superadmin</option>
                     </select>
                 </div>
 

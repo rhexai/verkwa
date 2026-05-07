@@ -13,33 +13,33 @@ export const checkRole = async (role: Roles) => {
 
 export const isAdmin = async () => {
   const role = await getRole();
-  return role === "Administrator" || role === "admin" || role === "superadmin";
+  return ["Administrator", "admin", "superadmin", "Superadmin"].includes(role as string);
 };
 
 export const isStaff = async () => {
   const role = await getRole();
-  const staffRoles = ["Administrator", "Manager", "Operator", "Mobilizer", "admin", "superadmin", "employee"];
+  const staffRoles = ["Administrator", "Manager", "Operator", "Mobilizer", "admin", "superadmin", "employee", "Superadmin"];
   return staffRoles.includes(role as string);
 };
 
 export const canViewSettings = async () => {
   const role = await getRole();
-  return ["Administrator", "admin", "superadmin"].includes(role as string);
+  return ["Administrator", "admin", "superadmin", "Superadmin"].includes(role as string);
 };
 
 export const canViewAccounting = async () => {
   const role = await getRole();
-  return ["Administrator", "admin", "superadmin"].includes(role as string);
+  return ["Administrator", "admin", "superadmin", "Superadmin"].includes(role as string);
 };
 
 export const canViewBusinessData = async () => {
   const role = await getRole();
-  return ["Administrator", "Manager", "admin", "superadmin"].includes(role as string);
+  return ["Administrator", "Manager", "admin", "superadmin", "Superadmin"].includes(role as string);
 };
 
 export const isSuperadmin = async () => {
   const role = await getRole();
-  return role === "superadmin" || role === "Administrator";
+  return role === "superadmin" || role === "Administrator" || role === "Superadmin";
 };
 
 export const isClient = async () => {

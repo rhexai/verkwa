@@ -75,6 +75,11 @@ function TransactionsContent() {
       try {
         setLoading(true);
         
+        if (isRestricted && !employeeId) {
+          setLoading(false);
+          return;
+        }
+
         // Map UI Tab to DB Type
         const currentTab = activeTab.toUpperCase();
         const dbType = currentTab === "DEPOSITS" ? "Deposit" :
@@ -84,14 +89,23 @@ function TransactionsContent() {
                       currentTab === "COMMISSIONS" ? "Commission" : null;
 
         // 1. Fetch filtered list with pagination
-        let query = supabase
-          .from('transactions')
-          .select(`
+        const selectFields = isRestricted && employeeId
+          ? `
+            *,
+            customers!inner(first_name, last_name, account_num, added_by),
+            employees (first_name, last_name),
+            branches (name)
+          `
+          : `
             *,
             customers (first_name, last_name, account_num),
             employees (first_name, last_name),
             branches (name)
-          `)
+          `;
+
+        let query = supabase
+          .from('transactions')
+          .select(selectFields)
           .order('created_at', { ascending: false })
           .range(page * limit, (page + 1) * limit - 1);
         
@@ -102,14 +116,7 @@ function TransactionsContent() {
         
         // 1b. Apply staff-level isolation for restricted roles
         if (isRestricted && employeeId) {
-          // Managers and Mobilizers only see transactions for clients they onboarded
-          // We use !inner to force a join that filters the root table
-          query = query.select(`
-            *,
-            customers!inner(first_name, last_name, account_num, added_by),
-            employees (first_name, last_name),
-            branches (name)
-          `).eq('customers.added_by', employeeId);
+          query = query.eq('customers.added_by', employeeId);
         }
         
         const { data, error } = await query;
@@ -142,8 +149,8 @@ function TransactionsContent() {
           });
         }
 
-      } catch (err) {
-        console.error("Error fetching transactions:", err);
+      } catch (err: any) {
+        console.error("Error fetching transactions:", err.message || err);
       } finally {
         setLoading(false);
       }

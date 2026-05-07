@@ -16,19 +16,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const isClient = role === "client";
   
   // Specific role flags
-  const isSuperadmin = role === "superadmin" || role === "Administrator";
-  const isAdmin = ["Administrator", "admin", "superadmin"].includes(role);
+  const isSuperadmin = role === "superadmin" || role === "Administrator" || role === "Superadmin";
+  const isAdmin = ["Administrator", "admin", "superadmin", "Superadmin"].includes(role);
   const isManager = role === "Manager" || role === "manager";
   const isOperator = role === "Operator" || role === "operator";
   const isMobilizer = role === "Mobilizer" || role === "mobilizer";
 
   // Permission groups
-  const isStaff = ["Administrator", "Manager", "Operator", "Mobilizer", "admin", "superadmin", "employee", "manager", "operator", "mobilizer"].includes(role);
-  const canManageAccounts = ["Administrator", "Manager", "Operator", "admin", "superadmin"].includes(role);
-  const canViewTransactions = ["Administrator", "Manager", "Operator", "admin", "superadmin"].includes(role);
-  const canManageBusiness = ["Administrator", "Manager", "admin", "superadmin"].includes(role);
-  const canManageAccess = ["Administrator", "admin", "superadmin"].includes(role);
-  const canViewAccounting = ["Administrator", "admin", "superadmin"].includes(role);
+  const isStaff = ["Administrator", "Manager", "Operator", "Mobilizer", "admin", "superadmin", "employee", "manager", "operator", "mobilizer", "Superadmin"].includes(role);
+  const canManageAccounts = ["Administrator", "Manager", "Operator", "admin", "superadmin", "Superadmin"].includes(role);
+  const canViewTransactions = ["Administrator", "Manager", "Operator", "admin", "superadmin", "Superadmin"].includes(role);
+  const canManageBusiness = ["Administrator", "Manager", "admin", "superadmin", "Superadmin"].includes(role);
+  const canManageAccess = ["Administrator", "admin", "superadmin", "Superadmin"].includes(role);
+  const canViewAccounting = ["Administrator", "admin", "superadmin", "Superadmin"].includes(role);
 
   const clientLinks = [
     { name: "Account history", href: "/dashboard/client/activity", icon: "receipt", visible: true },

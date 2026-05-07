@@ -83,7 +83,7 @@ export default function AccountsPage() {
     }
 
     fetchCustomers();
-  }, [page]);
+  }, [page, resolvedRole, employeeId]);
 
   return (
     <div className="w-full max-w-7xl mx-auto space-y-6 pb-20 font-sans">
@@ -147,7 +147,7 @@ export default function AccountsPage() {
               ) : records.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-10 py-20 text-center text-slate-300 font-black tracking-widest text-[11px] italic">
-                    No customer parameters defined in system
+                    No customer yet.
                   </td>
                 </tr>
               ) : (
