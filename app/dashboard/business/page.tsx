@@ -50,39 +50,46 @@ export default function BusinessDataPage() {
     e.preventDefault();
     setSaving(true);
     
-    
-    const branchPayload = { 
-      name: formData.name,
-      code: formData.code,
-      location: formData.location,
-      phone: formData.phone,
-      region: formData.region
-    };
+    try {
+      const branchPayload = { 
+        name: formData.name,
+        code: formData.code,
+        location: formData.location,
+        phone: formData.phone,
+        region: formData.region
+      };
 
-    let error;
-    if (editingBranch) {
-      const { error: updateError } = await supabase
-        .from('branches')
-        .update(branchPayload)
-        .eq('id', editingBranch.id);
-      error = updateError;
-    } else {
-      const { error: insertError } = await supabase
-        .from('branches')
-        .insert([branchPayload]);
-      error = insertError;
+      let error;
+      if (editingBranch) {
+        const { error: updateError } = await supabase
+          .from('branches')
+          .update(branchPayload)
+          .eq('id', editingBranch.id);
+        error = updateError;
+      } else {
+        const { error: insertError } = await supabase
+          .from('branches')
+          .insert([branchPayload]);
+        error = insertError;
+      }
+  
+      if (error) {
+        console.error("Supabase Save Error:", error);
+        alert("Error saving branch: " + (error.message || "Unknown database error"));
+      } else {
+        setIsDrawerOpen(false);
+        setEditingBranch(null);
+        setFormData({ name: "", code: "", location: "", phone: "", region: "" });
+        fetchBranches();
+      }
+    } catch (err: any) {
+      console.error("Unexpected Branch Save Error:", err);
+      alert("Critical Error: " + (err.message || "Network request failed. Please check your connection or Supabase URL."));
+    } finally {
+      setSaving(false);
     }
- 
-    if (error) {
-      alert("Error saving branch: " + error.message);
-    } else {
-      setIsDrawerOpen(false);
-      setEditingBranch(null);
-      setFormData({ name: "", code: "", location: "", phone: "", region: "" });
-      fetchBranches();
-    }
-    setSaving(false);
   };
+
 
   return (
     <div className="w-full max-w-7xl mx-auto space-y-6 pb-20 font-sans">
@@ -295,7 +302,7 @@ export default function BusinessDataPage() {
                   disabled={saving}
                   className="w-full py-4 bg-[#2EB67D] text-white rounded-2xl font-bold text-[13px] hover:bg-[#259465] transition-all disabled:opacity-50 shadow-xl shadow-slate-200"
                 >
-                  {saving ? "Processing..." : editingBranch ? "Commit updates" : "Register branch"}
+                  {saving ? "Processing..." : editingBranch ? "Save" : "Register branch"}
                 </button>
               </div>
             </form>

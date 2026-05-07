@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useUser } from "@clerk/nextjs";
 import { supabase } from "@/lib/supabase";
+import Link from "next/link";
+
 
 export default function ClientSupportPage() {
   const { user, isLoaded } = useUser();
@@ -119,13 +121,10 @@ export default function ClientSupportPage() {
 
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 px-2">
         <div className="space-y-1">
-          <h1 className="text-[32px] font-bold text-slate-900 tracking-tight leading-none">Message center</h1>
-          <p className="text-slate-400 font-bold text-[11px] tracking-widest uppercase">Secure communication protocol</p>
+          <h1 className="text-[32px] font-bold text-slate-900 tracking-tight leading-none">Contact Support</h1>
+          <p className="text-slate-400 font-bold text-[11px] tracking-widest">Get assistance from our team</p>
         </div>
-        <div className="flex items-center gap-4 bg-slate-50 px-6 py-3 rounded-2xl border border-slate-100">
-            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-            <span className="text-[10px] font-black text-slate-400 tracking-widest uppercase leading-none">Live connectivity</span>
-        </div>
+
       </div>
 
       <div className="flex-1 bg-white border border-slate-200 rounded-3xl flex flex-col overflow-hidden relative shadow-sm">
@@ -137,10 +136,10 @@ export default function ClientSupportPage() {
                <div className="w-16 h-16 border border-slate-100 rounded-2xl flex items-center justify-center text-slate-200 shadow-sm">
                   <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                </div>
-               <div className="space-y-2">
-                  <h3 className="text-[14px] font-bold text-slate-900 tracking-widest uppercase">Buffer initialized</h3>
-                  <p className="text-[11px] font-medium text-slate-400 max-w-xs leading-relaxed italic tracking-tight">Direct branch comms are active. Responses typically occur within 45 minutes.</p>
-               </div>
+                <div className="space-y-2">
+                   <h3 className="text-[14px] font-bold text-slate-900 tracking-widest">Hi {user?.firstName || 'there'}, how can we help you today?</h3>
+                   <p className="text-[11px] font-medium text-slate-400 max-w-sm leading-relaxed tracking-tight">Tell us your account ID and other details to get help from Verkwa support</p>
+                </div>
             </div>
           ) : (
             messages.map((msg, i) => (
@@ -173,7 +172,7 @@ export default function ClientSupportPage() {
            <form onSubmit={sendMessage} className="flex gap-4">
               <input 
                 type="text" 
-                placeholder="Compose secure transmission ..."
+                placeholder="Enter message ..."
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}
                 className="flex-1 px-8 py-5 bg-white border border-slate-100 text-[14px] font-bold text-slate-900 focus:outline-none focus:border-slate-900 transition-all placeholder:text-slate-200 tracking-tight rounded-2xl shadow-sm"

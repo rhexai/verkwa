@@ -109,7 +109,7 @@ export default function ClientActivityPage() {
       </div>
 
       {isStaff && (
-        <div className="bg-slate-900 rounded-2xl p-6 text-white flex items-center justify-between shadow-lg">
+        <div className="bg-accent rounded-2xl p-6 text-white flex items-center justify-between shadow-lg">
            <div className="flex items-center gap-4">
               <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center">
                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-accent"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/></svg>
@@ -142,10 +142,10 @@ export default function ClientActivityPage() {
           </button>
           <Link 
             href="/dashboard/client/requests"
-            className="px-6 py-3 bg-slate-900 text-white rounded-full font-bold text-xs hover:bg-black transition-all flex items-center gap-2 shadow-xl shadow-slate-200"
+            className="px-6 py-3 bg-accent text-white rounded-full font-bold text-xs hover:bg-accent/90 transition-all flex items-center gap-2 shadow-xl shadow-slate-200"
           >
              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-             New action
+             New Request
           </Link>
         </div>
       </div>
@@ -158,7 +158,7 @@ export default function ClientActivityPage() {
                 onClick={() => setFilterType(t)}
                 className={`px-8 py-2 rounded-full text-[12px] font-bold transition-all whitespace-nowrap ${
                   filterType === t 
-                  ? "bg-slate-900 text-white shadow-lg shadow-slate-100" 
+                  ? "bg-accent text-white shadow-lg shadow-green-100" 
                   : "bg-white text-slate-400 border border-slate-100 hover:text-slate-600"
                 }`}
               >

@@ -12,6 +12,16 @@ export default function DashboardPage() {
   const { resolvedRole, isSyncing, employeeId } = useAuthSync();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
+    customers: 0,
+    employees: 0,
+    branches: 0,
+    transactions: 0,
+    financials: {
+      revenue: { today: 0, month: 0, total: 0 },
+      deposits: { today: 0, month: 0, total: 0 },
+      withdrawals: { today: 0, month: 0, total: 0 },
+      loans: { today: 0, month: 0, total: 0 },
+    },
     staffPerformance: [] as any[],
     pendingRequests: [] as any[]
   });
@@ -46,130 +56,47 @@ export default function DashboardPage() {
       }
 
       try {
-        // 1. Fetch Counts (Lightweight head-only queries)
-        let custCountQuery = supabase.from('customers').select('*', { count: 'exact', head: true });
-        let txCountQuery = supabase.from('transactions').select('*', { count: 'exact', head: true });
-
-        if (isRestricted && employeeId) {
-          custCountQuery = custCountQuery.eq('added_by', employeeId);
-          txCountQuery = txCountQuery.eq('staff_id', employeeId);
-        }
-
-        const [custCount, empCount, branchCount, txCount, pendingReqs] = await Promise.all([
-          custCountQuery,
-          supabase.from('employees').select('*', { count: 'exact', head: true }),
-          supabase.from('branches').select('*', { count: 'exact', head: true }),
-          txCountQuery,
-          isAdmin ? supabase.from('client_requests').select('*, customers(first_name, last_name, account_num)').eq('status', 'Pending').order('created_at', { ascending: false }).limit(5) : Promise.resolve({ data: [] })
-        ]);
-
-        const now = new Date();
-        const monthStart = startOfMonth(now).toISOString();
-        const todayStr = now.toISOString().split('T')[0];
-        const monthStr = now.toISOString().slice(0, 7);
-
-        // 2. Optimized Fetching Strategy
-        // A. Current Month & Today data (Heavy - includes joins for performance stats)
-        let monthlyTxsQuery = supabase
-          .from('transactions')
-          .select('amount, type, created_at, staff_id, employees(first_name, last_name)')
-          .gte('created_at', monthStart);
-
-        if (isRestricted && employeeId) {
-          monthlyTxsQuery = monthlyTxsQuery.eq('staff_id', employeeId);
-        }
-
-        // B. Lifetime Aggregates (Lightweight - primitive columns only)
-        let lifetimeTxsQuery = supabase
-          .from('transactions')
-          .select('amount, type');
-
-        if (isRestricted && employeeId) {
-          lifetimeTxsQuery = lifetimeTxsQuery.eq('staff_id', employeeId);
-        }
-
-        const [monthlyRes, lifetimeRes] = await Promise.all([
-          monthlyTxsQuery,
-          lifetimeTxsQuery
-        ]);
-
-        if (monthlyRes.error) throw monthlyRes.error;
-        if (lifetimeRes.error) throw lifetimeRes.error;
-
-        const monthlyTxs = monthlyRes.data || [];
-        const lifetimeTxs = lifetimeRes.data || [];
-
-        const financials = {
-          revenue: { today: 0, month: 0, total: 0 },
-          deposits: { today: 0, month: 0, total: 0 },
-          withdrawals: { today: 0, month: 0, total: 0 },
-          loans: { today: 0, month: 0, total: 0 },
-        };
-
-        const performanceMap: Record<string, any> = {};
-
-        // Process Lifetime Totals first
-        lifetimeTxs.forEach(tx => {
-          if (tx.status === 'rejected' || tx.status === 'denied') return; // Skip rejected/denied transactions
-          const amount = Number(tx.amount || 0);
-          if (tx.type === 'Deposit') financials.deposits.total += amount;
-          else if (tx.type === 'Withdrawal') financials.withdrawals.total += amount;
-          else if (tx.type === 'Loan') financials.loans.total += amount;
-          else if (tx.type === 'Commission') financials.revenue.total += amount;
+        // 1. Fetch Stats via Optimized RPC
+        const { data: rpcData, error: rpcError } = await supabase.rpc('get_dashboard_stats', {
+          p_employee_id: isRestricted ? employeeId : null
         });
 
-        // Process Monthly/Today/Performance data
-        monthlyTxs.forEach(tx => {
-          if (tx.status === 'rejected' || tx.status === 'denied') return; // Skip rejected/denied transactions
-          const amount = Number(tx.amount || 0);
-          const txDate = tx.created_at?.split('T')[0];
-          const txMonth = tx.created_at?.slice(0, 7);
+        if (rpcError) throw rpcError;
 
-          if (tx.type === 'Deposit') {
-            if (txDate === todayStr) financials.deposits.today += amount;
-            if (txMonth === monthStr) financials.deposits.month += amount;
-          } else if (tx.type === 'Withdrawal') {
-            if (txDate === todayStr) financials.withdrawals.today += amount;
-            if (txMonth === monthStr) financials.withdrawals.month += amount;
-          } else if (tx.type === 'Loan') {
-            if (txDate === todayStr) financials.loans.today += amount;
-            if (txMonth === monthStr) financials.loans.month += amount;
-          } else if (tx.type === 'Commission') {
-            if (txDate === todayStr) financials.revenue.today += amount;
-            if (txMonth === monthStr) financials.revenue.month += amount;
-          }
-
-          const staffName = tx.employees 
-            ? `${tx.employees.first_name} ${tx.employees.last_name}` 
-            : "System / Admin";
-            
-          if (!performanceMap[staffName]) {
-            performanceMap[staffName] = { name: staffName, today: 0, week: 0, month: 0 };
-          }
+        // 2. Fetch Pending Requests (Separate as it's a specific UI component)
+        let pendingRequests = [];
+        if (isAdmin) {
+          const { data: reqs } = await supabase
+            .from('client_requests')
+            .select('*, customers(first_name, last_name, account_num)')
+            .eq('status', 'Pending')
+            .order('created_at', { ascending: false })
+            .limit(5);
           
-          if (txDate === todayStr) performanceMap[staffName].today += amount;
-          if (txMonth === monthStr) performanceMap[staffName].month += amount;
-          performanceMap[staffName].week += amount;
-        });
+          pendingRequests = (reqs || []).filter((r: any) => !clearedIds.has(r.id));
+        }
 
         setStats({
-          customers: custCount.count || 0,
-          employees: empCount.count || 0,
-          branches: branchCount.count || 0,
-          transactions: txCount.count || 0,
-          financials,
-          staffPerformance: Object.values(performanceMap),
-          pendingRequests: (isAdmin ? (pendingReqs as any).data : [] || []).filter((r: any) => !clearedIds.has(r.id))
+          customers: rpcData.customers || 0,
+          employees: rpcData.employees || 0,
+          branches: rpcData.branches || 0,
+          transactions: rpcData.transactions || 0,
+          financials: rpcData.financials,
+          staffPerformance: rpcData.staffPerformance || [],
+          pendingRequests
         });
       } catch (err) {
         console.error("Dashboard Stats Fetch Error:", err);
+        // Fallback to minimal data if RPC fails
+        setLoading(false);
       } finally {
         setLoading(false);
       }
     }
 
     if (isLoaded) fetchDashboardStats();
-  }, [isLoaded, isStaff, role, employeeId, clearedIds]);
+  }, [isLoaded, isStaff, isAdmin, isRestricted, employeeId, clearedIds]);
+
 
   if (!isLoaded || loading || isSyncing) {
     return (
@@ -191,10 +118,20 @@ export default function DashboardPage() {
   
   const heroStats = [
     { 
+      title: "Account", 
+      today: ((stats?.financials?.deposits?.today ?? 0) + (stats?.financials?.revenue?.today ?? 0) - (stats?.financials?.withdrawals?.today ?? 0)).toFixed(2), 
+      month: ((stats?.financials?.deposits?.month ?? 0) + (stats?.financials?.revenue?.month ?? 0) - (stats?.financials?.withdrawals?.month ?? 0)).toFixed(2), 
+      lifetime: ((stats?.financials?.deposits?.total ?? 0) + (stats?.financials?.revenue?.total ?? 0) - (stats?.financials?.withdrawals?.total ?? 0)).toFixed(2), 
+      icon: "coins", 
+      visible: canViewFinancials,
+      link: "/dashboard/ledgers",
+      actionLabel: "View Ledgers"
+    },
+    { 
       title: "Revenue", 
-      today: stats.financials.revenue.today.toFixed(2), 
-      month: stats.financials.revenue.month.toFixed(2), 
-      lifetime: stats.financials.revenue.total.toFixed(2), 
+      today: (stats?.financials?.revenue?.today ?? 0).toFixed(2), 
+      month: (stats?.financials?.revenue?.month ?? 0).toFixed(2), 
+      lifetime: (stats?.financials?.revenue?.total ?? 0).toFixed(2), 
       icon: "banknote", 
       visible: canViewFinancials,
       link: "/dashboard/reports",
@@ -202,9 +139,9 @@ export default function DashboardPage() {
     },
     { 
       title: "Deposits", 
-      today: stats.financials.deposits.today.toFixed(2), 
-      month: stats.financials.deposits.month.toFixed(2), 
-      lifetime: stats.financials.deposits.total.toFixed(2), 
+      today: (stats?.financials?.deposits?.today ?? 0).toFixed(2), 
+      month: (stats?.financials?.deposits?.month ?? 0).toFixed(2), 
+      lifetime: (stats?.financials?.deposits?.total ?? 0).toFixed(2), 
       icon: "wallet", 
       visible: true,
       link: "/dashboard/transactions/deposit",
@@ -212,32 +149,22 @@ export default function DashboardPage() {
     },
     { 
       title: "Withdrawals", 
-      today: stats.financials.withdrawals.today.toFixed(2), 
-      month: stats.financials.withdrawals.month.toFixed(2), 
-      lifetime: stats.financials.withdrawals.total.toFixed(2), 
+      today: (stats?.financials?.withdrawals?.today ?? 0).toFixed(2), 
+      month: (stats?.financials?.withdrawals?.month ?? 0).toFixed(2), 
+      lifetime: (stats?.financials?.withdrawals?.total ?? 0).toFixed(2), 
       icon: "arrow-down", 
       visible: true,
       link: "/dashboard/transactions/withdrawal",
       actionLabel: "Initialize Debit"
     },
-    { 
-      title: "Loans", 
-      today: stats.financials.loans.today.toFixed(2), 
-      month: stats.financials.loans.month.toFixed(2), 
-      lifetime: stats.financials.loans.total.toFixed(2), 
-      icon: "coins", 
-      visible: canViewFinancials,
-      link: "/dashboard/transactions?tab=LOANS",
-      actionLabel: "Manage Loans"
-    },
   ].filter(s => s.visible);
 
   const generalStats = [
-    { value: stats.customers.toString(), label: "Customers", visible: !isRestricted },
-    { value: stats.customers.toString(), label: "Accounts", visible: !isRestricted },
-    { value: stats.employees.toString(), label: "Employees", visible: isAdmin },
-    { value: stats.branches.toString(), label: "Branches", visible: isAdmin },
-    { value: stats.transactions.toString(), label: "Sms", visible: canViewFinancials },
+    { value: (stats?.customers ?? 0).toString(), label: "Customers", visible: true },
+    { value: (stats?.customers ?? 0).toString(), label: "Accounts", visible: true },
+    { value: (stats?.employees ?? 0).toString(), label: "Employees", visible: isAdmin },
+    { value: (stats?.branches ?? 0).toString(), label: "Branches", visible: isAdmin },
+    { value: (stats?.transactions ?? 0).toString(), label: "Sms", visible: canViewFinancials },
     { value: "0", label: "Complaints", visible: true },
   ].filter(s => s.visible);
 
@@ -283,7 +210,7 @@ export default function DashboardPage() {
                 {stat.title === "Revenue" && <span className="text-sm font-bold text-slate-900 leading-none">₵</span>}
                 {stat.title === "Deposits" && <div className="w-2.5 h-2.5 bg-slate-400 rounded-full" />}
                 {stat.title === "Withdrawals" && <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>}
-                {stat.title === "Loans" && <span className="text-sm font-bold">L</span>}
+                {stat.title === "Account" && <span className="text-sm font-bold">L</span>}
               </div>
             </div>
 
@@ -636,7 +563,7 @@ function ClientDashboardView({ user }: { user: any }) {
             </div>
           </div>
           <div className="space-y-1">
-            <p className="text-[11px] font-bold text-slate-400 tracking-widest uppercase">Growth facility</p>
+            <p className="text-[11px] font-bold text-slate-400 tracking-widest uppercase">Growth account</p>
             <div className="flex items-baseline gap-2">
               <span className="text-[32px] font-bold text-slate-900 tracking-tight">₵ {data.loan.amount.toFixed(0)}</span>
               <span className="text-[10px] font-semibold text-accent bg-slate-50 px-2 py-0.5 rounded-full">{data.loan.status === 'n/a' ? 'Pre-filled' : data.loan.status}</span>
@@ -690,7 +617,7 @@ function ClientDashboardView({ user }: { user: any }) {
         </div>
 
         {/* Support/Quick Help Card */}
-        <div className="bg-slate-900 border border-slate-900 rounded-2xl p-6 shadow-xl flex flex-col justify-between min-h-[160px] text-white overflow-hidden relative">
+        <div className="bg-accent border border-accent rounded-2xl p-6 shadow-xl flex flex-col justify-between min-h-[160px] text-white overflow-hidden relative">
           <div className="absolute top-0 right-0 p-4 opacity-10">
              <svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
           </div>
@@ -792,19 +719,14 @@ function ClientDashboardView({ user }: { user: any }) {
            </div>
 
            <div className="bg-white border border-slate-200 rounded-2xl p-8 space-y-6 shadow-sm">
-              <h3 className="text-[13px] font-bold text-slate-400 tracking-widest uppercase">Branch connectivity</h3>
+              <h3 className="text-[13px] font-bold text-slate-400 tracking-widest uppercase">Branch</h3>
               <div className="flex items-center gap-4">
                  <div className="w-12 h-12 rounded-2xl bg-accent text-white flex items-center justify-center font-black text-xl">
                     {data.branch?.name?.[0] || "M"}
                  </div>
                  <div>
-                    <p className="text-[15px] font-bold text-slate-900 leading-none mb-1">{data.branch?.name || "Main Terminal"}</p>
-                    <p className="text-[11px] font-bold text-slate-400 tracking-widest uppercase italic">Primary node</p>
+                    <p className="text-[15px] font-bold text-slate-900 leading-none">{data.branch?.name || "Main Terminal"}</p>
                  </div>
-              </div>
-              <div className="pt-4 border-t border-slate-50 flex items-center justify-between">
-                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Latency</span>
-                 <span className="text-[10px] font-bold text-green-500 bg-green-50 px-2 py-0.5 rounded-full uppercase tracking-tighter">Optimal</span>
               </div>
            </div>
 

@@ -29,75 +29,84 @@ const GitHubIcon = () => (
 );
 
 const VerkwaSusuLogo = ({ className }: { className?: string }) => (
-  <div className={`flex items-center gap-2 ${className}`}>
-    <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-brand to-indigo-400 flex items-center justify-center shadow-lg shadow-brand/20">
-      <div className="w-4 h-4 rounded-sm bg-white rotate-45" />
+  <div className={`flex flex-col items-center gap-4 ${className}`}>
+    <div className="relative w-32 h-32 lg:w-40 lg:h-40 drop-shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
+      <Image
+        src="/images/logo.png"
+        alt="Verkwa Susu Logo"
+        fill
+        className="object-contain"
+        priority
+      />
     </div>
-    <span className="text-2xl font-bold tracking-tight text-white drop-shadow-sm">Verkwa Susu</span>
   </div>
 );
 
 export default function Home() {
   return (
-    <div className="relative min-h-screen flex flex-col items-center justify-center selection:bg-brand/20 py-20 px-4 overflow-x-hidden">
+    <div className="relative h-screen w-full flex flex-col items-center justify-center selection:bg-brand/20 p-4 overflow-hidden">
       {/* Full-Page Background Image with Gradient Overlay */}
-      <div className="fixed inset-0 z-0">
+      <div className="absolute inset-0 z-0">
         <Image
-          src="/hero.png"
+          src="/pexels-planeteelevene-32644853.jpg"
           alt="Professional smiling at camera"
           fill
-          className="object-cover"
+          className="object-cover object-center"
           priority
+          sizes="100vw"
+          quality={100}
         />
-        <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/60" />
+
+        {/* Subtle, high-end overlays */}
+        <div className="absolute inset-0 bg-gradient-to-tr from-black/70 via-black/20 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/80" />
       </div>
 
       {/* Main Content Content - Vertically Stacked and Centered */}
-      <div className="relative z-10 w-full max-w-4xl flex flex-col items-center justify-center space-y-12 lg:space-y-20">
+      <div className="relative z-10 w-full max-w-4xl flex flex-col items-center justify-between h-full py-12 lg:py-16">
         
         {/* Brand Logo & Badge */}
-        <div className="flex flex-col items-center space-y-8 animate-in fade-in slide-in-from-top-6 duration-1000">
+        <div className="flex flex-col items-center space-y-6 animate-in fade-in slide-in-from-top-6 duration-1000">
           <VerkwaSusuLogo />
-          <div className="inline-flex items-center px-4 py-1.5 bg-white/10 backdrop-blur-md rounded-full border border-white/20 text-[10px] font-bold tracking-[0.2em] uppercase text-white/90">
+          <div className="inline-flex items-center px-4 py-1.5 bg-white/10 backdrop-blur-md rounded-full border border-white/20 text-[9px] font-bold tracking-[0.2em] uppercase text-white/90">
             Client Portal
           </div>
         </div>
 
         {/* Hero Section */}
-        <div className="flex flex-col items-center text-center space-y-6 max-w-3xl px-4 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-200">
-          <h1 className="font-serif text-4xl lg:text-6xl text-white leading-[1.15] tracking-tight text-balance">
+        <div className="flex flex-col items-center text-center space-y-4 max-w-3xl px-4 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-200">
+          <h1 className="font-serif text-3xl lg:text-5xl text-white leading-tight tracking-tight text-balance">
             Manage your entire Susu Savings.
           </h1>
-          <p className="text-lg lg:text-xl text-white/70 max-w-xl leading-relaxed text-balance">
-            Secure savings and loan management platform.
+          <p className="text-base lg:text-lg text-white/70 max-w-md leading-relaxed text-balance">
+            The secure savings and loan management platform.
           </p>
         </div>
 
         <Show when="signed-out">
           {/* Login Card - Glassmorphism */}
-          <div className="w-full max-w-[440px] p-8 lg:p-10 bg-white/5 backdrop-blur-2xl border border-white/10 rounded-3xl shadow-2xl animate-in fade-in zoom-in-95 duration-1000 delay-400">
-            <div className="space-y-10">
+          <div className="w-full max-w-[400px] p-8 bg-white/5 backdrop-blur-2xl border border-white/10 rounded-3xl shadow-2xl animate-in fade-in zoom-in-95 duration-1000 delay-400">
+            <div className="space-y-8">
               {/* Form Header */}
-              <div className="space-y-4 text-center">
-                <h2 className="font-serif text-3xl text-white tracking-tight">Client Portal</h2>
-                <p className="text-white/50 text-base leading-relaxed">
-                  Join Verkwa Susu today to manage your savings.
+              <div className="space-y-3 text-center">
+                <h2 className="font-serif text-2xl text-white tracking-tight">Login/Signup</h2>
+                <p className="text-white/40 text-sm leading-relaxed">
+                  Join Verkwa Susu to manage your savings.
                 </p>
               </div>
 
               {/* Action Buttons */}
-              <div className="space-y-4">
+              <div className="space-y-3">
                 <SignInButton mode="modal">
-                  <button className="group relative w-full bg-brand text-white py-4 px-6 rounded-xl font-bold flex items-center justify-center gap-2 overflow-hidden transition-all hover:bg-brand/90 hover:shadow-2xl hover:shadow-brand/40 active:scale-[0.98] shadow-lg shadow-brand/20">
+                  <button className="group relative w-full bg-brand text-white py-3.5 px-6 rounded-xl font-bold flex items-center justify-center gap-2 overflow-hidden transition-all hover:bg-brand/90 hover:shadow-2xl hover:shadow-brand/40 active:scale-[0.98] shadow-lg shadow-brand/20 text-sm">
                     <div className="absolute inset-0 w-full h-full bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity" />
                     <span>Sign In</span>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="transition-transform group-hover:translate-x-1"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="transition-transform group-hover:translate-x-1"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
                   </button>
                 </SignInButton>
                 
                 <SignUpButton mode="modal">
-                  <button className="group relative w-full bg-white/5 border border-white/10 text-white font-bold py-4 px-6 rounded-xl flex items-center justify-center gap-2 overflow-hidden transition-all hover:bg-white/10 active:scale-[0.98]">
+                  <button className="group relative w-full bg-white/5 border border-white/10 text-white font-bold py-3.5 px-6 rounded-xl flex items-center justify-center gap-2 overflow-hidden transition-all hover:bg-white/10 active:scale-[0.98] text-sm">
                     <span>Create an Account</span>
                   </button>
                 </SignUpButton>

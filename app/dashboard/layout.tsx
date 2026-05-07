@@ -32,8 +32,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const clientLinks = [
     { name: "Account history", href: "/dashboard/client/activity", icon: "receipt", visible: true },
-    { name: "Service requests", href: "/dashboard/client/requests", icon: "clipboard-list", visible: true },
-    { name: "Message center", href: "/dashboard/client/support", icon: "message-square", visible: true },
+    { name: "Service request", href: "/dashboard/client/requests", icon: "clipboard-list", visible: true },
     { name: "My profile", href: "/dashboard/client/profile", icon: "user-cog", visible: true },
   ];
 
@@ -45,9 +44,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { name: "Access", href: "/dashboard/access", icon: "lock", visible: canManageAccess },
     { name: "Business", href: "/dashboard/business", icon: "briefcase", visible: canManageBusiness },
     { name: "Accounting", href: "/dashboard/accounting", icon: "calculator", visible: canViewAccounting },
-    { name: "Ledgers", href: "/dashboard/ledgers", icon: "folder", visible: canViewTransactions },
+    { name: "Ledgers", href: "/dashboard/ledgers", icon: "folder", visible: isAdmin },
     { name: "Reports", href: "/dashboard/reports", icon: "bar-chart-2", visible: canViewTransactions },
-    { name: "Sms", href: "/dashboard/sms", icon: "message-square", visible: canViewTransactions },
+    { name: "Generate", href: "/dashboard/generate", icon: "file-plus", visible: isAdmin },
     { name: "Settings", href: "/dashboard/settings", icon: "settings", visible: isAdmin },
     { name: "System", href: "/dashboard/system", icon: "cpu", visible: isSuperadmin },
   ].filter(l => l.visible);
@@ -55,14 +54,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const navLinks = isClient ? clientLinks : staffLinks;
 
   const quickActions = [
-    { name: "Deposit alert", icon: "deposit", href: "/dashboard/client/requests?type=deposit", color: "text-green-600", visible: isClient },
+    { name: "Deposit req", icon: "deposit", href: "/dashboard/client/requests?type=deposit", color: "text-green-600", visible: isClient },
     { name: "Withdrawal req", icon: "withdrawal", href: "/dashboard/client/requests?type=withdrawal", color: "text-red-600", visible: isClient },
     { name: "Deposit", icon: "deposit", href: "/dashboard/transactions/deposit", color: "text-green-600", visible: isStaff },
     { name: "Withdrawal", icon: "withdrawal", href: "/dashboard/transactions/withdrawal", color: "text-green-600", visible: canManageAccounts },
     { name: "Loan request", icon: "loan-req", href: "/dashboard/loans/request", color: "text-green-700", visible: canManageAccounts },
     { name: "Loan payment", icon: "loan-pay", href: "/dashboard/loans/payment", color: "text-green-600", visible: canManageAccounts },
     { name: "Complaint", icon: "complaint", href: "/dashboard/business/complaints/new", color: "text-green-600", visible: canManageAccounts },
-    { name: "Add member", icon: "user-plus", href: "/dashboard/accounts/add", color: "text-green-800", visible: isAdmin },
+    { name: "Add client", icon: "user-plus", href: "/dashboard/accounts/add", color: "text-green-800", visible: isAdmin },
   ].filter(a => a.visible);
 
   // Map strict strings for the URL paths matching screenshots perfectly
@@ -94,8 +93,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* Logo Area */}
         <div className="h-20 flex items-center px-8 border-b border-slate-50">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-accent rounded-lg flex items-center justify-center text-white font-black text-sm">V</div>
-            <h1 className="text-lg font-bold text-slate-900 tracking-tight leading-none">Verkwa</h1>
+            <div className="w-20 h-20 flex items-center justify-center overflow-visible -ml-5">
+               <img src="/images/logo.png" alt="Verkwa Logo" className="w-full h-full object-contain scale-125" />
+            </div>
           </div>
         </div>
 
@@ -140,7 +140,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* Logout Area */}
         <div className="px-6 py-6 border-t border-slate-50">
           <button className="w-full flex justify-center items-center gap-2 px-4 py-3 bg-slate-50 hover:bg-slate-100 rounded-xl text-slate-600 font-bold text-xs transition-all">
-            Log out system
+            Log out
           </button>
         </div>
       </aside>

@@ -21,6 +21,7 @@ function TransactionsContent() {
 
   const searchParams = useSearchParams();
   const initialTab = searchParams.get("tab")?.toUpperCase() || "DEPOSITS";
+  const initialCustomer = searchParams.get("customer") || "";
   
   const tabs = ["Deposits", "Withdrawals", "Loans", "Loan payments", "Commissions"];
   const [activeTab, setActiveTab] = useState(initialTab);
@@ -29,6 +30,14 @@ function TransactionsContent() {
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const limit = 10;
+  
+  // Filter States
+  const [selectedCustomerId, setSelectedCustomerId] = useState(initialCustomer);
+  const [selectedBranchId, setSelectedBranchId] = useState("");
+  const [selectedStatus, setSelectedStatus] = useState("");
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [branches, setBranches] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const [totals, setTotals] = useState({ 
     amount: 0, 
@@ -44,6 +53,22 @@ function TransactionsContent() {
   const [isDeductionDrawerOpen, setIsDeductionDrawerOpen] = useState(false);
   const [isPaymentDrawerOpen, setIsPaymentDrawerOpen] = useState(false);
   const [deductionDate, setDeductionDate] = useState(new Date().toLocaleDateString('en-GB')); // dd/mm/yyyy
+
+  useEffect(() => {
+    async function fetchMetadata() {
+      let custQuery = supabase.from('customers').select('id, first_name, last_name, account_num').order('last_name');
+      
+      if (isRestricted && employeeId) {
+        custQuery = custQuery.eq('added_by', employeeId);
+      }
+      
+      const { data: custData } = await custQuery;
+      const { data: branchData } = await supabase.from('branches').select('id, name').order('name');
+      setCustomers(custData || []);
+      setBranches(branchData || []);
+    }
+    fetchMetadata();
+  }, []);
 
   useEffect(() => {
     async function fetchTransactions() {
@@ -71,10 +96,20 @@ function TransactionsContent() {
           .range(page * limit, (page + 1) * limit - 1);
         
         if (dbType) query = query.eq('type', dbType);
+        if (selectedCustomerId) query = query.eq('customer_id', selectedCustomerId);
+        if (selectedBranchId) query = query.eq('branch_id', selectedBranchId);
+        if (selectedStatus) query = query.eq('status', selectedStatus);
         
         // 1b. Apply staff-level isolation for restricted roles
         if (isRestricted && employeeId) {
-          query = query.eq('staff_id', employeeId);
+          // Managers and Mobilizers only see transactions for clients they onboarded
+          // We use !inner to force a join that filters the root table
+          query = query.select(`
+            *,
+            customers!inner(first_name, last_name, account_num, added_by),
+            employees (first_name, last_name),
+            branches (name)
+          `).eq('customers.added_by', employeeId);
         }
         
         const { data, error } = await query;
@@ -85,44 +120,28 @@ function TransactionsContent() {
         setRecords(txs);
         setHasMore(data?.length === limit);
 
-        // 2. Fetch Aggregates/Totals for the active tab (Optimized)
-        // Note: For a true production app, these should be calculated via RPC or 
-        // specialized aggregate queries. Here we use a targeted query.
-        let totalsQuery = supabase.from('transactions').select('amount, status, type');
-        if (dbType) totalsQuery = totalsQuery.eq('type', dbType);
+        // 2. Fetch Aggregates via RPC (High Performance)
+        const { data: aggData, error: aggError } = await supabase.rpc('get_transaction_aggregates', {
+          p_type: dbType,
+          p_employee_id: isRestricted ? employeeId : null
+        });
 
-        if (isRestricted && employeeId) {
-          totalsQuery = totalsQuery.eq('staff_id', employeeId);
-        }
+        if (aggError) throw aggError;
 
-        const { data: allTxsForTotals } = await totalsQuery;
-
-        if (allTxsForTotals) {
-          const validTxs = allTxsForTotals.filter(t => t.status !== 'rejected' && t.status !== 'denied');
-          const totalAmount = validTxs.reduce((sum, t) => sum + Number(t.amount), 0);
-          
-          let payable = 0, paid = 0, rejected = 0, approved = 0;
-          allTxsForTotals.forEach(t => {
-            if (t.type === 'Loan') {
-              payable += Number(t.amount);
-              if (t.status === 'approved' || t.status === 'ok') approved++;
-              if (t.status === 'rejected' || t.status === 'denied') rejected++;
-            }
-            if (t.type === 'Loan Payment') paid += Number(t.amount);
-          });
-
+        if (aggData) {
           setTotals({ 
-            amount: totalAmount, 
-            count: allTxsForTotals.length,
-            payable: payable,
-            paid: paid,
-            outstanding: payable - paid,
-            approved: approved,
-            rejected: rejected,
-            principal: payable * 0.9,
-            interest: payable * 0.1
+            amount: aggData.total_amount, 
+            count: aggData.count,
+            payable: aggData.payable || 0,
+            paid: aggData.paid || 0,
+            outstanding: (aggData.payable || 0) - (aggData.paid || 0),
+            approved: aggData.approved_count || 0,
+            rejected: aggData.rejected_count || 0,
+            principal: (aggData.payable || 0) * 0.9,
+            interest: (aggData.payable || 0) * 0.1
           });
         }
+
       } catch (err) {
         console.error("Error fetching transactions:", err);
       } finally {
@@ -131,7 +150,7 @@ function TransactionsContent() {
     }
 
     fetchTransactions();
-  }, [activeTab, page, resolvedRole, employeeId]);
+  }, [activeTab, page, resolvedRole, employeeId, selectedCustomerId, selectedBranchId, selectedStatus]);
     return (
     <div className="w-full max-w-7xl mx-auto space-y-6 pb-20 font-sans animate-in fade-in duration-700">
       <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
@@ -165,6 +184,8 @@ function TransactionsContent() {
             <input 
               type="text" 
               placeholder="Search history..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
               className="w-72 pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-full text-xs focus:outline-none focus:border-accent/30 transition-all placeholder:text-slate-300"
             />
           </div>
@@ -197,20 +218,72 @@ function TransactionsContent() {
           </div>
         </div>
 
+        {/* Filters Row */}
+        <div className="p-6 border-b border-slate-50 grid grid-cols-1 md:grid-cols-3 gap-6 bg-white">
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-900 tracking-widest uppercase">Customer</label>
+            <select 
+              value={selectedCustomerId}
+              onChange={(e) => { setSelectedCustomerId(e.target.value); setPage(0); }}
+              className="w-full px-5 py-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold focus:outline-none focus:border-accent/30 transition-all appearance-none cursor-pointer"
+            >
+              <option value="">All customers</option>
+              {customers.map(c => (
+                <option key={c.id} value={c.id}>{c.last_name}, {c.first_name} ({c.account_num})</option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-900 tracking-widest uppercase">Branch</label>
+            <select 
+              value={selectedBranchId}
+              onChange={(e) => { setSelectedBranchId(e.target.value); setPage(0); }}
+              className="w-full px-5 py-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold focus:outline-none focus:border-accent/30 transition-all appearance-none cursor-pointer"
+            >
+              <option value="">All branches</option>
+              {branches.map(b => (
+                <option key={b.id} value={b.id}>{b.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-900 tracking-widest uppercase">Status</label>
+            <select 
+              value={selectedStatus}
+              onChange={(e) => { setSelectedStatus(e.target.value); setPage(0); }}
+              className="w-full px-5 py-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold focus:outline-none focus:border-accent/30 transition-all appearance-none cursor-pointer"
+            >
+              <option value="">All status</option>
+              <option value="ok">Success / OK</option>
+              <option value="pending">Pending</option>
+              <option value="approved">Approved</option>
+              <option value="failed">Failed</option>
+            </select>
+          </div>
+        </div>
+
         {/* Records Header */}
         <div className="px-10 py-6 flex items-center justify-between border-b border-slate-50">
           <h3 className="text-[12px] font-black tracking-[0.2em] text-slate-900 underline decoration-slate-100 underline-offset-8">{records.length} Verified records</h3>
           <div className="flex items-center gap-6">
+            <button 
+              onClick={() => {
+                setSelectedCustomerId("");
+                setSelectedBranchId("");
+                setSelectedStatus("");
+                setPage(0);
+              }}
+              className="text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-accent transition-all"
+            >
+              Reset filters
+            </button>
             <div className="bg-[#2EB67D] px-5 py-2 text-white text-[10px] font-black tracking-widest">Page capacity: {limit}</div>
           </div>
         </div>
 
         {/* Summary Block */}
         <div className="bg-[#2EB67D] px-10 py-10 flex flex-col lg:flex-row lg:items-center justify-between gap-10">
-          <div className="space-y-1">
-            <p className="text-[10px] font-bold tracking-widest text-white/40">Current archive summary</p>
-            <h3 className="text-[28px] font-bold text-white tracking-tight leading-none">Session aggregate</h3>
-          </div>
+
           
           <div className="flex flex-wrap items-center gap-4">
             {activeTab === "DEPOSITS" && (
@@ -290,14 +363,14 @@ function TransactionsContent() {
                   <td colSpan={9} className="px-8 py-20 text-center">
                     <div className="flex flex-col items-center gap-4">
                       <div className="w-8 h-8 border-4 border-accent border-t-transparent rounded-full animate-spin"></div>
-                      <span className="text-xs font-bold text-slate-400">Loading audit trail...</span>
+                      <span className="text-xs font-bold text-slate-400">Loading...</span>
                     </div>
                   </td>
                 </tr>
               ) : records.length === 0 ? (
                 <tr className="bg-white">
-                  <td colSpan={9} className="px-10 py-20 text-center text-[11px] font-black text-slate-300 uppercase tracking-widest italic">
-                    No log entry detected within active parameters.
+                  <td colSpan={9} className="px-10 py-20 text-center text-[11px] font-bold text-slate-300 tracking-widest">
+                    No activity yet.
                   </td>
                 </tr>
               ) : (

@@ -10,7 +10,7 @@ export default function AccountsPage() {
   const isAdmin = ["administrator", "admin", "superadmin"].includes(role);
   const isRestricted = !isAdmin && role !== "client" && role !== "";
 
-  const tabs = ["Customers", "Accounts list", "Account types", "Account modes"];
+  const tabs = ["Customers"];
   const [records, setRecords] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
@@ -118,7 +118,7 @@ export default function AccountsPage() {
             />
           </div>
           <Link href="/dashboard/accounts/add" className="px-6 py-2.5 bg-slate-900 text-white rounded-full font-bold text-xs hover:bg-black transition-all shadow-md shadow-slate-200">
-            Initialize member
+            Add Client
           </Link>
         </div>
 
@@ -288,7 +288,7 @@ export default function AccountsPage() {
               <div className="space-y-6 pt-6 border-t border-slate-50">
                 <div className="flex items-center justify-between">
                   <h4 className="text-[13px] font-bold text-slate-800 tracking-widest">Recent activity</h4>
-                  <Link href={`/dashboard/transactions?customer=${selectedCustomer.id}`} className="text-[10px] font-bold text-accent hover:underline">Full audit trail ›</Link>
+                  <Link href={`/dashboard/transactions?customer=${selectedCustomer.id}`} className="text-[10px] font-bold text-accent hover:underline">Full activities ›</Link>
                 </div>
 
                 <div className="space-y-3 min-h-[100px]">
@@ -330,7 +330,7 @@ export default function AccountsPage() {
                   onClick={() => setIsDrawerOpen(false)}
                   className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold text-[13px] hover:bg-black transition-all shadow-xl shadow-slate-200"
                 >
-                  Close Dossier
+                  Close
                 </button>
               </div>
             </div>

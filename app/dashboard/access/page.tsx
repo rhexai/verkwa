@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
 export default function AccessControlPage() {
-  const tabs = ["Staff", "Roles", "Permissions", "Assign permission"];
+  const tabs = ["Staff"];
   const [records, setRecords] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedStaff, setSelectedStaff] = useState<any>(null);
@@ -286,7 +286,7 @@ export default function AccessControlPage() {
                   disabled={saving}
                   className="w-full py-4 bg-[#2EB67D] text-white rounded-2xl font-bold text-[13px] hover:bg-[#259465] transition-all disabled:opacity-50 shadow-xl shadow-slate-200"
                 >
-                  {saving ? "Processing..." : "Commit updates"}
+                  {saving ? "Processing..." : "Save"}
                 </button>
               </div>
             </form>

@@ -6,6 +6,8 @@ import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
+import { usePaystackPayment } from "react-paystack";
+
 export default function ClientRequestsPage() {
   const { user, isLoaded } = useUser();
   const router = useRouter();
@@ -22,6 +24,25 @@ export default function ClientRequestsPage() {
     message: ""
   });
 
+  // Paystack Config
+  const paystackConfig = {
+    reference: (new Date()).getTime().toString(),
+    email: user?.primaryEmailAddress?.emailAddress || "",
+    amount: Math.round((parseFloat(formData.amount) || 0) * 100),
+    publicKey: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || "",
+    currency: "GHS",
+  };
+
+  const onSuccess = (reference: any) => {
+    handleFinalSubmit(reference.reference);
+  };
+
+  const onClose = () => {
+    setSubmitting(false);
+  };
+
+  const initializePayment = usePaystackPayment(paystackConfig);
+
   useEffect(() => {
     async function fetchData() {
       const email = user?.primaryEmailAddress?.emailAddress;
@@ -36,7 +57,6 @@ export default function ClientRequestsPage() {
 
         if (cust) {
           setCustomer(cust);
-          // Fetch existing requests (Assuming a table exists, if not we fall back to a mock or shared ledger)
           const { data: reqs } = await supabase
             .from('client_requests')
             .select('*')
@@ -58,22 +78,62 @@ export default function ClientRequestsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!customer) return;
-    setSubmitting(true);
 
+    if (formData.type === "Deposit" && parseFloat(formData.amount) > 0) {
+      setSubmitting(true);
+      initializePayment({ onSuccess, onClose });
+    } else {
+      handleFinalSubmit();
+    }
+  };
+
+  const handleFinalSubmit = async (paystackRef?: string) => {
+    console.log("Final submission started:", { paystackRef, formData });
+    setSubmitting(true);
+    
     try {
-      const { error } = await supabase
-        .from('client_requests')
-        .insert([{
+      if (!customer?.id) {
+        console.error("Missing customer ID");
+        throw new Error("Account context lost. Please refresh the page.");
+      }
+
+      if (formData.type === "Deposit" && paystackRef) {
+        // Direct insertion to transactions for Paystack deposits to immediately update balance
+        const txPayload = {
+          customer_id: customer.id,
+          amount: parseFloat(formData.amount) || 0,
+          type: 'Deposit',
+          status: 'approved',
+          deposit_by: `Paystack: ${paystackRef}`,
+          branch_id: customer.branch_id || null
+        };
+        
+        const { error: txError } = await supabase.from('transactions').insert([txPayload]);
+        if (txError) throw txError;
+        
+      } else {
+        const payload = {
           customer_id: customer.id,
           type: formData.type,
           amount: parseFloat(formData.amount) || 0,
-          details: formData.message,
-          status: 'Pending'
-        }]);
+          details: formData.message || "",
+          status: 'Pending',
+          reference: paystackRef || null
+        };
 
-      if (error) throw error;
-      
-      // Refresh list
+        console.log("Inserting into Supabase:", payload);
+        
+        const { error } = await supabase
+          .from('client_requests')
+          .insert([payload]);
+
+        if (error) {
+          console.error("Supabase Insert Error:", error);
+          throw error;
+        }
+      }
+
+      // Refresh list and close modal
       const { data: newReqs } = await supabase
         .from('client_requests')
         .select('*')
@@ -83,17 +143,23 @@ export default function ClientRequestsPage() {
       setRequests(newReqs || []);
       setIsFormOpen(false);
       setFormData({ type: "Withdrawal", amount: "", message: "" });
-      alert("Success! Your " + formData.type + " authorization has been committed to the secure protocol queue.");
-    } catch (err: any) {
-      if (err.code === '42P01') {
-        alert("The Request System database is currently being configured by the operative. Please retry in a few moments or use the support chat.");
-      } else {
-        alert("System Error: " + err.message);
+      
+      // If we just deposited, it's good practice to force a page reload or state update to reflect new balance.
+      // Since balance is fetched in the parent layout/dashboard, we might need a hard refresh for the client.
+      if (formData.type === "Deposit" && paystackRef) {
+        window.location.reload();
       }
+      
+    } catch (err: any) {
+      console.error("Final Submit Exception:", err);
+      alert("System Error: " + (err.message || "Unknown error occurred"));
     } finally {
       setSubmitting(false);
     }
   };
+
+
+
 
   if (!isLoaded || loading) {
     return (
@@ -106,51 +172,31 @@ export default function ClientRequestsPage() {
   return (
     <div className="w-full max-w-7xl mx-auto space-y-10 pb-20 font-sans animate-in fade-in duration-700">
       
-      {/* Navigation Tabs */}
-      <div className="flex items-center gap-8 border-b border-slate-100 pb-1">
-        {[
-          { name: "Overview", href: "/dashboard" },
-          { name: "Requests", href: "/dashboard/client/requests" },
-          { name: "Activity", href: "/dashboard/client/activity" },
-          { name: "Profile", href: "/dashboard/client/profile" }
-        ].map((tab) => (
-          <Link
-            key={tab.name}
-            href={tab.href}
-            className={`pb-4 text-[13px] font-bold border-b-2 transition-all ${
-              tab.name === "Requests" 
-                ? "border-accent text-slate-900" 
-                : "border-transparent text-slate-400 hover:text-slate-600 hover:border-slate-200"
-            }`}
-          >
-            {tab.name}
-          </Link>
-        ))}
-      </div>
+
 
       {/* Header Area */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-10">
         <div className="space-y-1 text-left">
           <h1 className="text-[32px] font-bold text-slate-900 tracking-tight leading-none">Service center</h1>
-          <p className="text-slate-400 font-bold text-[11px] tracking-widest uppercase">Account authorization terminal</p>
+          <p className="text-slate-400 font-bold text-[11px] tracking-widest uppercase">Account terminal</p>
         </div>
 
         <button 
           onClick={() => setIsFormOpen(true)}
-          className="px-8 py-4 bg-slate-900 text-white font-bold text-[11px] tracking-widest uppercase hover:bg-black transition-all flex items-center gap-3 shadow-xl rounded-xl active:scale-95"
+          className="px-8 py-4 bg-accent text-white font-bold text-[11px] tracking-widest uppercase hover:bg-accent/90 transition-all flex items-center gap-3 shadow-xl rounded-xl active:scale-95"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14"/></svg>
-          New authorization
+          New Request
         </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
+      <div className="flex justify-center">
         
-        {/* REQUEST LIST (Left Side - 2/3) */}
-        <div className="lg:col-span-2 space-y-10">
+        {/* REQUEST LIST */}
+        <div className="w-full max-w-4xl space-y-10">
           <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm relative">
             <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-               <h2 className="text-[15px] font-bold text-slate-800">Active protocol queue</h2>
+               <h2 className="text-[15px] font-bold text-slate-800">Pending Request(s)</h2>
                <div className="flex gap-1.5">
                   <div className="w-1.5 h-1.5 bg-accent rounded-full" />
                   <div className="w-1.5 h-1.5 bg-slate-100 rounded-full" />
@@ -163,7 +209,7 @@ export default function ClientRequestsPage() {
                    <div className="w-16 h-16 border border-slate-100 rounded-2xl flex items-center justify-center text-slate-200">
                       <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
                    </div>
-                   <p className="text-slate-300 font-bold italic tracking-widest text-[11px] uppercase">Buffer empty</p>
+                   <p className="text-slate-300 font-bold tracking-widest text-[11px]">Pending request(s)</p>
                 </div>
               ) : (
                 requests.map((req, i) => (
@@ -193,27 +239,7 @@ export default function ClientRequestsPage() {
 
         {/* SIDEBAR TIPS & ACTION (Right Side - 1/3) */}
         <div className="space-y-10">
-           <div className="bg-slate-900 text-white p-8 rounded-2xl space-y-6 shadow-xl relative overflow-hidden group">
-              <div className="absolute top-0 right-0 p-8 opacity-10">
-                 <svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-              </div>
-              <h3 className="text-[13px] font-black tracking-widest text-white/50 uppercase">Protocol notice</h3>
-              <p className="text-[13px] text-white/70 font-medium leading-relaxed relative z-10 italic">
-                Authorizations are systematically verified within <span className="text-white font-bold">2-4 business hours.</span> Ensure data integrity to prevent segmentation faults.
-              </p>
-              <div className="pt-2 relative z-10">
-                 <button className="w-full py-4 bg-white text-slate-900 font-bold text-[11px] tracking-widest uppercase hover:bg-slate-50 transition-all rounded-xl">Contact operative</button>
-              </div>
-           </div>
 
-           <div className="bg-white border border-slate-200 p-8 rounded-2xl text-center space-y-6 shadow-sm">
-              <div className="w-12 h-12 border border-slate-100 rounded-2xl flex items-center justify-center mx-auto text-slate-200 font-bold text-[20px]">
-                 !
-              </div>
-              <h4 className="text-[13px] font-bold text-slate-400 tracking-widest uppercase">Reconciliation</h4>
-              <p className="text-[11px] font-medium text-slate-400 leading-relaxed px-4 tracking-tight italic">Historical ledger data is accessible via the central activity archive.</p>
-              <Link href="/dashboard/client/activity" className="inline-block text-[11px] font-bold text-accent hover:underline uppercase tracking-widest">Open archive ›</Link>
-           </div>
         </div>
       </div>
 
@@ -223,7 +249,7 @@ export default function ClientRequestsPage() {
           <div className="bg-white w-full max-w-xl border border-slate-100 shadow-2xl animate-in zoom-in-95 duration-300 rounded-3xl relative overflow-hidden">
             <div className="p-10 space-y-10">
               <div className="flex items-center justify-between border-b border-slate-50 pb-8">
-                <h2 className="text-[24px] font-bold text-slate-900 tracking-tight leading-none">New authorization</h2>
+                <h2 className="text-[24px] font-bold text-slate-900 tracking-tight leading-none">New Request</h2>
                 <button 
                   onClick={() => setIsFormOpen(false)} 
                   className="w-10 h-10 border border-slate-100 rounded-full flex items-center justify-center text-slate-300 hover:border-slate-900 hover:text-slate-900 transition-all font-bold text-lg"
@@ -279,8 +305,9 @@ export default function ClientRequestsPage() {
                     disabled={submitting}
                     className="w-full py-5 bg-slate-900 text-white font-bold text-[12px] tracking-widest uppercase hover:bg-black transition-all active:scale-[0.98] disabled:bg-slate-100 rounded-2xl shadow-xl"
                    >
-                      {submitting ? "Syncing..." : "Commit protocol"}
+                      {submitting ? "Syncing..." : formData.type === 'Deposit' ? "Pay with Paystack" : "Request"}
                    </button>
+
                 </div>
               </form>
             </div>

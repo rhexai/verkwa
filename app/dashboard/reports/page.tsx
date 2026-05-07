@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuthSync } from "@/lib/hooks/useAuthSync";
+import Link from "next/link";
 import { 
   AreaChart, 
   Area, 
@@ -35,84 +36,74 @@ export default function ReportsPage() {
 
   useEffect(() => {
     async function fetchReportData() {
+
       try {
         setLoading(true);
-        // Fetch last 30 days of transactions for trending
-        const thirtyDaysAgo = subDays(new Date(), 30).toISOString();
         
-        let query = supabase
-          .from('transactions')
-          .select('amount, type, created_at')
-          .gte('created_at', thirtyDaysAgo)
-          .order('created_at', { ascending: true });
+        // 1. Fetch Daily Aggregates via RPC (High Performance)
+        const { data: dailyData, error: rpcError } = await supabase.rpc('get_daily_aggregates', {
+          p_days: 30,
+          p_employee_id: isRestricted ? employeeId : null
+        });
 
-        if (isRestricted && employeeId) {
-          query = query.eq('staff_id', employeeId);
-        }
+        if (rpcError) throw rpcError;
 
-        const { data: txs, error } = await query;
-        
-        if (error) throw error;
-
-        // Create 30-day timeline
+        // 2. Create 30-day timeline and map data
         const days = eachDayOfInterval({
           start: subDays(new Date(), 29),
           end: new Date()
         });
 
-        let deposit = 0;
-        let withdrawal = 0;
-        let loan = 0;
-        let commission = 0;
+        let totalDeposit = 0;
+        let totalWithdrawal = 0;
+        let totalLoan = 0;
+        let totalCommission = 0;
 
         const timeSeries = days.map(day => {
           const dateStr = format(day, "MMM dd");
-          let dayDeposit = 0;
-          let dayWithdrawal = 0;
-          let dayLoan = 0;
-          let dayCommission = 0;
+          const dbDateStr = format(day, "yyyy-MM-dd");
+          
+          // Find match in RPC data (date string comparison)
+          const dayMatch = dailyData?.find((d: any) => d.day === dbDateStr);
+          
+          const d = dayMatch?.deposit || 0;
+          const w = dayMatch?.withdrawal || 0;
+          const l = dayMatch?.loan || 0;
+          const c = dayMatch?.commission || 0;
 
-          txs?.forEach(tx => {
-            if (tx.status === 'rejected' || tx.status === 'denied') return; // Skip rejected/denied transactions
-            if (isSameDay(new Date(tx.created_at), day)) {
-              const amt = Number(tx.amount);
-              if (tx.type === 'Deposit') dayDeposit += amt;
-              else if (tx.type === 'Withdrawal') dayWithdrawal += amt;
-              else if (tx.type === 'Loan') dayLoan += amt;
-              else if (tx.type === 'Commission') dayCommission += amt;
-            }
-          });
-
-          deposit += dayDeposit;
-          withdrawal += dayWithdrawal;
-          loan += dayLoan;
-          commission += dayCommission;
+          totalDeposit += d;
+          totalWithdrawal += w;
+          totalLoan += l;
+          totalCommission += c;
 
           return {
             name: dateStr,
-            Deposit: dayDeposit,
-            Withdrawal: dayWithdrawal,
-            Loan: dayLoan,
-            Commission: dayCommission
+            Deposit: d,
+            Withdrawal: w,
+            Loan: l,
+            Commission: c
           };
         });
 
         setReportData({
-          depositTotal: deposit,
-          withdrawalTotal: withdrawal,
-          loanTotal: loan,
-          commissionTotal: commission,
+          depositTotal: totalDeposit,
+          withdrawalTotal: totalWithdrawal,
+          loanTotal: totalLoan,
+          commissionTotal: totalCommission,
           timeSeries
         });
-      } catch (err) {
-        console.error("Error fetching report data:", err);
+      } catch (err: any) {
+        console.error("Error fetching report data:", err?.message || err);
       } finally {
         setLoading(false);
       }
     }
 
-    fetchReportData();
-  }, [resolvedRole, employeeId]);
+    if (!isSyncing && (!isRestricted || employeeId)) {
+      fetchReportData();
+    }
+  }, [isSyncing, isRestricted, employeeId]);
+
 
   const charts = [
     { title: "Deposit", total: reportData.depositTotal.toFixed(2), subtitle: "Daily volume (30d)", hasData: reportData.depositTotal > 0, color: "#2EB67D", dataKey: "Deposit" },
@@ -127,17 +118,21 @@ export default function ReportsPage() {
         
         {/* Tabs Row */}
         <div className="flex items-center px-6 pt-4 border-b border-slate-50 gap-8">
-          {tabs.map((tab, idx) => (
-            <button 
-              key={tab}
+          {[
+            { name: "Highlight", href: "/dashboard/reports" },
+            { name: "Generate", href: "/dashboard/generate" },
+          ].map((tab) => (
+            <Link
+              key={tab.name}
+              href={tab.href}
               className={`pb-3 text-[13px] font-bold border-b-2 transition-colors ${
-                idx === 0 
+                tab.name === "Highlight" 
                 ? "border-accent text-slate-900" 
                 : "border-transparent text-slate-400 hover:text-slate-600"
               }`}
             >
-              {tab}
-            </button>
+              {tab.name}
+            </Link>
           ))}
         </div>
 
@@ -181,7 +176,7 @@ export default function ReportsPage() {
             {/* Recharts Area */}
             <div className="flex-1 w-full px-2">
               {loading ? (
-                <div className="flex-1 flex items-center justify-center italic text-slate-300 text-xs font-medium h-full">
+                <div className="flex-1 flex items-center justify-center text-slate-300 text-xs font-medium h-full">
                   Calculating trajectory...
                 </div>
               ) : chart.hasData ? (
@@ -222,7 +217,7 @@ export default function ReportsPage() {
                   </AreaChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="flex-1 flex items-center justify-center italic text-slate-300 text-xs font-medium h-full">
+                <div className="flex-1 flex items-center justify-center text-slate-300 text-xs font-medium h-full">
                    Insufficient data for 30-day visualization
                 </div>
               )}

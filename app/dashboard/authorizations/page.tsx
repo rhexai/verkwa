@@ -31,25 +31,50 @@ export default function AuthorizationsPage() {
 
   const fetchPendingRequests = async () => {
     try {
+      console.log("Fetching pending authorizations...");
       setLoading(true);
-      const { data, error } = await supabase
+      const { data: requestsData, error: requestsError } = await supabase
         .from('client_requests')
-        .select(`
-          *,
-          customers (
-            first_name,
-            last_name,
-            account_num,
-            branch_id
-          )
-        `)
+        .select('*')
         .eq('status', 'Pending')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (requestsError) {
+        console.error("Fetch Authorizations Error:", requestsError);
+        throw requestsError;
+      }
       
-      // Filter out any IDs we resolved in this session to prevent them re-appearing
-      const filtered = (data || []).filter(r => !resolvedIds.has(r.id));
+      console.log("Fetched authorizations count:", requestsData?.length || 0);
+      
+      if (!requestsData || requestsData.length === 0) {
+        setRequests([]);
+        return setLoading(false);
+      }
+
+      // Fetch customers separately to avoid foreign key schema cache errors (PGRST200)
+      const customerIds = [...new Set(requestsData.map(r => r.customer_id))].filter(Boolean);
+      let customerMap: Record<string, any> = {};
+      
+      if (customerIds.length > 0) {
+        const { data: customersData, error: customersError } = await supabase
+          .from('customers')
+          .select('id, first_name, last_name, account_num, branch_id')
+          .in('id', customerIds);
+          
+        if (!customersError && customersData) {
+          customerMap = customersData.reduce((acc, curr) => {
+            acc[curr.id] = curr;
+            return acc;
+          }, {} as Record<string, any>);
+        }
+      }
+
+      const enrichedRequests = requestsData.map(r => ({
+        ...r,
+        customers: customerMap[r.customer_id] || null
+      }));
+      
+      const filtered = enrichedRequests.filter(r => !resolvedIds.has(r.id));
       setRequests(filtered);
     } catch (err) {
       console.error("Error fetching requests:", err);
@@ -57,6 +82,7 @@ export default function AuthorizationsPage() {
       setLoading(false);
     }
   };
+
 
   useEffect(() => {
     if (!isSyncing) fetchPendingRequests();
@@ -107,7 +133,7 @@ export default function AuthorizationsPage() {
             staff_id: employeeId,
             branch_id: request.customers?.branch_id || null,
             status: 'approved',
-            deposit_by: request.details || `Authorized ${request.type}`,
+            deposit_by: request.reference ? `Paystack: ${request.reference}` : (request.details || `Authorized ${request.type}`),
             created_at: new Date().toISOString()
           }]);
 
@@ -172,7 +198,7 @@ export default function AuthorizationsPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-10">
         <div className="space-y-1 text-left">
           <h1 className="text-[32px] font-bold text-slate-900 tracking-tight leading-none">Approval</h1>
-          <p className="text-slate-400 font-bold text-[11px] tracking-widest uppercase">Request review & clearance</p>
+          <p className="text-slate-400 font-bold text-[11px] tracking-widest">Request review and clearance</p>
         </div>
         
         {/* Success/Error Notification Area */}
@@ -198,8 +224,8 @@ export default function AuthorizationsPage() {
 
       <div className="bg-white border border-slate-100 rounded-2xl overflow-hidden shadow-sm shadow-slate-200/50">
         <div className="p-8 border-b border-slate-50 flex items-center justify-between bg-slate-50/30">
-           <h2 className="text-[15px] font-black text-slate-900 uppercase tracking-tight">{requests.length} pending requests</h2>
-           <button onClick={fetchPendingRequests} className="text-[11px] font-bold text-accent hover:underline uppercase tracking-widest flex items-center gap-2">
+           <h2 className="text-[15px] font-black text-slate-900 tracking-tight">{requests.length} pending requests</h2>
+           <button onClick={fetchPendingRequests} className="text-[11px] font-bold text-accent hover:underline tracking-widest flex items-center gap-2">
               <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
               Refresh queue
            </button>
@@ -224,7 +250,7 @@ export default function AuthorizationsPage() {
                        <div className="w-16 h-16 bg-slate-50 border border-slate-100 rounded-3xl flex items-center justify-center text-slate-200">
                           <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg>
                        </div>
-                       <p className="text-[12px] font-bold text-slate-300 uppercase tracking-widest italic">All requests cleared</p>
+                       <p className="text-[12px] font-bold text-slate-300 tracking-widest">All requests cleared</p>
                     </div>
                   </td>
                 </tr>
@@ -254,6 +280,11 @@ export default function AuthorizationsPage() {
                           }`}>
                             {req.type}
                           </span>
+                          {req.reference && (
+                             <span className="px-2 py-0.5 bg-accent/10 text-accent rounded text-[8px] font-black tracking-widest uppercase">
+                               Paid
+                             </span>
+                          )}
                           <p className="text-[11px] font-medium text-slate-500 italic max-w-[200px] line-clamp-1">"{req.details || 'No context provided'}"</p>
                        </div>
                     </td>
