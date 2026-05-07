@@ -17,6 +17,10 @@ const instrumentSerif = Instrument_Serif({
 export const metadata: Metadata = {
   title: "Verkwa Susu | Manage Your Entire Susu Savings",
   description: "Secure savings and loan management platform.",
+  icons: {
+    icon: "/favicon.ico",
+    apple: "/apple-touch-icon.png",
+  }
 };
 
 export default function RootLayout({
