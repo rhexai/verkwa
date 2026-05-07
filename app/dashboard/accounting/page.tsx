@@ -132,15 +132,15 @@ export default function AccountingPage() {
           <h1 className="text-[32px] font-bold text-slate-900 tracking-tight leading-none">Accounting</h1>
           <p className="text-slate-400 font-bold text-[11px] tracking-widest uppercase">Manage system revenue and operational expenses</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
            <button 
              onClick={() => setIsReserveModalOpen(true)}
-             className="px-6 py-3 bg-white border border-slate-200 text-slate-900 rounded-2xl font-bold text-xs shadow-sm hover:bg-slate-50 transition-all flex items-center gap-2"
+             className="flex-1 md:flex-none px-6 py-3 bg-white border border-slate-200 text-slate-900 rounded-2xl font-bold text-xs shadow-sm hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
            >
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/></svg>
               Manage reserve
            </button>
-           <Link href="/dashboard/ledgers" className="px-6 py-3 bg-slate-900 text-white rounded-2xl font-bold text-xs shadow-xl shadow-slate-200 hover:bg-slate-800 transition-all flex items-center gap-2">
+           <Link href="/dashboard/ledgers" className="flex-1 md:flex-none px-6 py-3 bg-slate-900 text-white rounded-2xl font-bold text-xs shadow-xl shadow-slate-200 hover:bg-slate-800 transition-all flex items-center justify-center gap-2">
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
               Register income
            </Link>
@@ -148,7 +148,7 @@ export default function AccountingPage() {
       </div>
 
       {/* Premium Stats Container */}
-      <div className="bg-[#2EB67D] rounded-[40px] overflow-hidden shadow-2xl relative p-12 flex flex-col min-h-[400px] justify-between border-4 border-white">
+      <div className="bg-[#2EB67D] rounded-[32px] md:rounded-[40px] overflow-hidden shadow-2xl relative p-6 md:p-12 flex flex-col min-h-[350px] md:min-h-[400px] justify-between border-2 md:border-4 border-white">
         <div className="flex items-center justify-between">
           <div className="space-y-1">
              <h3 className="text-[28px] font-bold text-white tracking-tight">Financial performance</h3>
@@ -159,25 +159,25 @@ export default function AccountingPage() {
           </div>
         </div>
 
-        <div className="flex flex-col items-center py-10">
-           <p className="text-[11px] font-bold text-white tracking-[0.4em] mb-2 uppercase opacity-80">Net operational income</p>
-           <h2 className="text-[64px] font-bold text-white tracking-tighter leading-none">
+        <div className="flex flex-col items-center py-6 md:py-10">
+           <p className="text-[9px] md:text-[11px] font-bold text-white tracking-[0.2em] md:tracking-[0.4em] mb-2 uppercase opacity-80">Net operational income</p>
+           <h2 className="text-[44px] md:text-[64px] font-bold text-white tracking-tighter leading-none">
               {loading ? "..." : `₵ ${financials.cashOnHand.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
            </h2>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-           <div className="p-8 bg-white/10 rounded-3xl border border-white/20 hover:bg-white/20 transition-all group">
-              <p className="text-[9px] font-bold text-white tracking-widest mb-2 uppercase opacity-60">Total yield</p>
-              <p className="text-[24px] font-bold text-white tracking-tight leading-none">₵ {financials.income.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+           <div className="p-6 md:p-8 bg-white/10 rounded-2xl md:rounded-3xl border border-white/20 hover:bg-white/20 transition-all group">
+              <p className="text-[9px] font-bold text-white tracking-widest mb-1 md:mb-2 uppercase opacity-60">Total yield</p>
+              <p className="text-[20px] md:text-[24px] font-bold text-white tracking-tight leading-none">₵ {financials.income.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
            </div>
-           <div className="p-8 bg-white/10 rounded-3xl border border-white/20 hover:bg-white/20 transition-all group">
-              <p className="text-[9px] font-bold text-white tracking-widest mb-2 uppercase opacity-60">Total withdrawals</p>
-              <p className="text-[24px] font-bold text-white tracking-tight leading-none">₵ {financials.expenses.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+           <div className="p-6 md:p-8 bg-white/10 rounded-2xl md:rounded-3xl border border-white/20 hover:bg-white/20 transition-all group">
+              <p className="text-[9px] font-bold text-white tracking-widest mb-1 md:mb-2 uppercase opacity-60">Total withdrawals</p>
+              <p className="text-[20px] md:text-[24px] font-bold text-white tracking-tight leading-none">₵ {financials.expenses.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
            </div>
-           <div className="p-8 bg-white/10 rounded-3xl border border-white/20 hover:bg-white/20 transition-all group">
-              <p className="text-[9px] font-bold text-white tracking-widest mb-2 uppercase opacity-80">Reserved capital</p>
-              <p className="text-[24px] font-bold text-white tracking-tight leading-none">
+           <div className="p-6 md:p-8 bg-white/10 rounded-2xl md:rounded-3xl border border-white/20 hover:bg-white/20 transition-all group">
+              <p className="text-[9px] font-bold text-white tracking-widest mb-1 md:mb-2 uppercase opacity-80">Reserved capital</p>
+              <p className="text-[20px] md:text-[24px] font-bold text-white tracking-tight leading-none">
                 ₵ {loading ? "..." : financials.reservedCapital.toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </p>
            </div>
@@ -192,7 +192,7 @@ export default function AccountingPage() {
                <Link href="/dashboard/ledgers" className="text-[11px] font-bold text-accent hover:underline tracking-widest uppercase">View full ledger ›</Link>
             </div>
 
-            <div className="bg-white border border-slate-100 rounded-3xl overflow-hidden shadow-sm">
+            <div className="bg-white border border-slate-100 rounded-3xl overflow-hidden shadow-sm overflow-x-auto">
                <table className="w-full text-left">
                   <thead>
                      <tr className="bg-slate-50/50 border-b border-slate-50">

@@ -238,7 +238,7 @@ function TransactionsContent() {
       <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
         
         {/* Tabs Row */}
-        <div className="flex items-center px-6 pt-4 border-b border-slate-50 gap-8">
+        <div className="flex items-center px-6 pt-4 border-b border-slate-50 gap-8 overflow-x-auto no-scrollbar snap-x">
           {tabs.map((tab) => (
             <button 
               key={tab}
@@ -246,7 +246,7 @@ function TransactionsContent() {
                 setActiveTab(tab.toUpperCase());
                 setPage(0);
               }}
-              className={`pb-3 text-[13px] font-bold border-b-2 transition-colors ${
+              className={`pb-3 text-[13px] font-bold border-b-2 transition-colors whitespace-nowrap snap-start ${
                 activeTab.toUpperCase() === tab.toUpperCase() 
                 ? "border-accent text-slate-900" 
                 : "border-transparent text-slate-400 hover:text-slate-600"
@@ -258,8 +258,8 @@ function TransactionsContent() {
         </div>
 
         {/* Actions Row */}
-        <div className="p-6 flex items-center justify-between border-b border-slate-50 bg-slate-50/50">
-          <div className="relative">
+        <div className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-50 bg-slate-50/50">
+          <div className="relative w-full md:w-auto">
             <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-slate-400">
                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
             </div>
@@ -268,14 +268,14 @@ function TransactionsContent() {
               placeholder="Search history..." 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-72 pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-full text-xs focus:outline-none focus:border-accent/30 transition-all placeholder:text-slate-300"
+              className="w-full md:w-72 pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-full text-xs focus:outline-none focus:border-accent/30 transition-all placeholder:text-slate-300"
             />
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 w-full md:w-auto overflow-x-auto no-scrollbar">
             {activeTab === "DEPOSITS" ? (
               <Link 
                 href="/dashboard/transactions/deposit"
-                className="px-6 py-2.5 bg-[#2EB67D] text-white rounded-full font-bold text-xs hover:bg-[#259465] transition-all shadow-md shadow-slate-200"
+                className="px-6 py-2.5 bg-[#2EB67D] text-white rounded-full font-bold text-xs hover:bg-[#259465] transition-all shadow-md shadow-slate-200 whitespace-nowrap"
               >
                 New entry
               </Link>
@@ -285,7 +285,7 @@ function TransactionsContent() {
                   if (activeTab === "REVENUE") setIsDeductionDrawerOpen(true);
                   if (activeTab === "LOAN PAYMENTS") setIsPaymentDrawerOpen(true);
                 }}
-                className="px-6 py-2.5 bg-[#2EB67D] text-white rounded-full font-bold text-xs hover:bg-[#259465] transition-all shadow-md shadow-slate-200"
+                className="px-6 py-2.5 bg-[#2EB67D] text-white rounded-full font-bold text-xs hover:bg-[#259465] transition-all shadow-md shadow-slate-200 whitespace-nowrap"
               >
                 {activeTab === "WITHDRAWALS" && "Initialize debit"}
                 {activeTab === "LOANS" && "Loan request"}
@@ -293,7 +293,7 @@ function TransactionsContent() {
                 {activeTab === "COMMISSIONS" && "Take deduction"}
               </button>
             )}
-            <button className="px-5 py-2 bg-white border border-slate-200 rounded-full text-slate-600 font-bold text-xs hover:bg-slate-50 transition-all flex items-center gap-2 shadow-sm">
+            <button className="px-5 py-2 bg-white border border-slate-200 rounded-full text-slate-600 font-bold text-xs hover:bg-slate-50 transition-all flex items-center gap-2 shadow-sm whitespace-nowrap">
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
               Export
             </button>

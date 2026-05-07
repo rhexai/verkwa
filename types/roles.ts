@@ -1,1 +1,1 @@
-export type Roles = "Administrator" | "Manager" | "Operator" | "Mobilizer" | "superadmin" | "admin" | "employee" | "client";
+export type Roles = "Administrator" | "Superadmin" | "Manager" | "Operator" | "Mobilizer" | "superadmin" | "admin" | "employee" | "client";

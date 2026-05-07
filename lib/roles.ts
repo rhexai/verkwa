@@ -39,7 +39,7 @@ export const canViewBusinessData = async () => {
 
 export const isSuperadmin = async () => {
   const role = await getRole();
-  return role === "superadmin" || role === "Administrator" || role === "Superadmin";
+  return ["superadmin", "Administrator", "Superadmin"].includes(role as string);
 };
 
 export const isClient = async () => {

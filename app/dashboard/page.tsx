@@ -179,7 +179,7 @@ export default function DashboardPage() {
     <div className="w-full max-w-7xl mx-auto space-y-10 pb-20 font-sans">
       
       {/* Navigation Tabs */}
-      <div className="flex items-center gap-8 border-b border-slate-100 pb-1">
+      <div className="flex items-center gap-8 border-b border-slate-100 pb-1 overflow-x-auto no-scrollbar snap-x">
         {tabs.map((tab) => (
           <Link
             key={tab}
@@ -190,11 +190,7 @@ export default function DashboardPage() {
               tab === "Loans" ? "/dashboard/transactions?tab=LOANS" :
               "/dashboard/reports"
             }
-            className={`pb-4 text-[13px] font-bold border-b-2 transition-all ${
-              tab === "Overview" 
-                ? "border-accent text-slate-900" 
-                : "border-transparent text-slate-400 hover:text-slate-600 hover:border-slate-200"
-            }`}
+            className="pb-4 text-[13px] font-bold border-b-2 transition-all whitespace-nowrap border-accent text-slate-900"
           >
             {tab}
           </Link>
@@ -503,7 +499,7 @@ function ClientDashboardView({ user }: { user: any }) {
     <div className="w-full max-w-7xl mx-auto space-y-10 pb-20 font-sans animate-in fade-in duration-700">
       
       {/* Navigation Tabs */}
-      <div className="flex items-center gap-8 border-b border-slate-100 pb-1">
+      <div className="flex items-center gap-8 border-b border-slate-100 pb-1 overflow-x-auto no-scrollbar snap-x">
         {tabs.map((tab) => (
           <Link
             key={tab}
@@ -513,11 +509,7 @@ function ClientDashboardView({ user }: { user: any }) {
               tab === "Activity" ? "/dashboard/client/activity" :
               "/dashboard/client/profile"
             }
-            className={`pb-4 text-[13px] font-bold border-b-2 transition-all ${
-              tab === "Overview" 
-                ? "border-accent text-slate-900" 
-                : "border-transparent text-slate-400 hover:text-slate-600 hover:border-slate-200"
-            }`}
+            className="pb-4 text-[13px] font-bold border-b-2 transition-all whitespace-nowrap border-accent text-slate-900"
           >
             {tab}
           </Link>
@@ -609,7 +601,7 @@ function ClientDashboardView({ user }: { user: any }) {
         
         {/* LEFT: Timeline & Activity */}
         <div className="lg:col-span-2 space-y-8">
-           <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+           <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm overflow-x-auto">
               <div className="p-6 border-b border-slate-100 flex items-center justify-between">
                  <h3 className="text-[15px] font-bold text-slate-800">Account activity</h3>
                  <div className="flex gap-1.5">

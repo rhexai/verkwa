@@ -10,6 +10,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const { resolvedRole, isSyncing } = useAuthSync();
   const pathname = usePathname();
   const [isQuickActionOpen, setIsQuickActionOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Use resolvedRole from Supabase fallback if available, otherwise Clerk metadata
   const role = resolvedRole || (user?.publicMetadata?.role as string) || "client";
@@ -88,8 +89,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <div className="flex h-screen bg-[#f5f7f9] overflow-hidden font-sans">
       
+      {/* MOBILE SIDEBAR OVERLAY */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[60] lg:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
       {/* SIDEBAR */}
-      <aside className="w-[260px] bg-white border-r border-border-subtle flex flex-col flex-shrink-0 z-20">
+      <aside className={`
+        fixed inset-y-0 left-0 w-[260px] bg-white border-r border-border-subtle flex flex-col flex-shrink-0 z-[70] transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0
+        ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}
+      `}>
         {/* Logo Area */}
         <div className="h-20 flex items-center px-8 border-b border-slate-50">
           <div className="flex items-center gap-3">
@@ -107,6 +119,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <Link 
                 key={link.name} 
                 href={link.href}
+                onClick={() => setIsSidebarOpen(false)}
                 className={`flex items-center gap-3 mx-3 px-4 py-3 rounded-xl text-[13px] font-semibold transition-all duration-200 group ${
                   isActive 
                   ? "bg-slate-100 text-slate-900" 
@@ -150,10 +163,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         
 
         {/* Top Navigation */}
-        <header className="h-20 bg-white border-b border-border-subtle z-20 flex items-center justify-between px-10 w-full">
-          <h2 className="text-[18px] font-bold text-slate-900 tracking-tight">
-            {getPageTitle()}
-          </h2>
+        <header className="h-16 md:h-20 bg-white border-b border-border-subtle z-20 flex items-center justify-between px-4 md:px-10 w-full">
+          <div className="flex items-center gap-3">
+            {/* Hamburger Button */}
+            <button 
+              onClick={() => setIsSidebarOpen(true)}
+              className="p-2 -ml-2 text-slate-500 hover:text-slate-900 lg:hidden"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></svg>
+            </button>
+            <h2 className="text-[16px] md:text-[18px] font-bold text-slate-900 tracking-tight">
+              {getPageTitle()}
+            </h2>
+          </div>
 
           <div className="flex items-center gap-4">
             <div className="relative hidden md:block">
@@ -210,7 +232,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </header>
 
         {/* Inject Dashboard Pages here */}
-        <main className="flex-1 overflow-y-auto w-full bg-background p-10">
+        <main className="flex-1 overflow-y-auto w-full bg-background p-4 md:p-10">
           {children}
         </main>
       </div>
